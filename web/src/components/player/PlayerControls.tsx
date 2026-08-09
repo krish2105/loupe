@@ -2,6 +2,8 @@
 
 import { Scrubber, type Chapter } from "./Scrubber";
 import { usePlayerControls, usePlayerState } from "./PlayerContext";
+import { QualityMenu } from "./QualityMenu";
+import type { HlsQuality } from "./useHls";
 import { cn, formatTimecode } from "@/lib/utils";
 
 /**
@@ -35,12 +37,17 @@ function ControlButton({
 
 export function PlayerControls({
   chapters,
-  level,
+  quality,
   onFullscreen,
 }: {
   chapters?: Chapter[];
-  /** Current rendition, e.g. "720p". Proof that ABR is doing something. */
-  level?: string | null;
+  /**
+   * The rendition ladder and the current choice. This used to be a bare
+   * `level` string rendered as a `<span>` — a resolution that looked exactly
+   * like the quality button of every player people already use and did
+   * nothing when pressed.
+   */
+  quality: HlsQuality;
   onFullscreen: () => void;
 }) {
   const { toggle } = usePlayerControls();
@@ -73,11 +80,12 @@ export function PlayerControls({
         </p>
 
         <div className="ml-auto flex items-center gap-2">
-          {level && (
-            <span className="font-mono text-(length:--step--2) text-ink/60">
-              {level}
-            </span>
-          )}
+          <QualityMenu
+            options={quality.options}
+            selected={quality.selected}
+            activeHeight={quality.activeHeight}
+            onSelect={quality.select}
+          />
           <ControlButton label="Full screen" onClick={onFullscreen}>
             <svg
               viewBox="0 0 20 20"

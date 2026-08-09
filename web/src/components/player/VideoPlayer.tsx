@@ -54,7 +54,7 @@ export function VideoPlayer({
 
   const { attach, seek, toggle, nudge } = usePlayerControls();
   const { duration, isReady } = usePlayerState();
-  const { status, level } = useHls(videoRef, src, mounted);
+  const { status, quality } = useHls(videoRef, src, mounted);
 
   // §9.1 progress writes. Subscribes imperatively, so this costs no renders.
   useProgressReporting(videoId);
@@ -186,7 +186,7 @@ export function VideoPlayer({
 
       <PlayerControls
         chapters={chapters}
-        level={level}
+        quality={quality}
         onFullscreen={toggleFullscreen}
       />
     </div>
