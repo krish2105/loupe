@@ -125,27 +125,41 @@ roughly the §4.1 shape of a real platform with an indexing backlog.
 
 ## Running it
 
-Requires Node 22+, pnpm, Python 3.11+, uv, and Postgres 17 with pgvector.
-
-Sign-in works locally without any hosted service. `services/auth` is a
-development identity provider that speaks GoTrue's API, so the app's Supabase
-client talks to it unchanged, and it refuses to start outside
-`ENVIRONMENT=local` ([ADR 0004](docs/adr/0004-development-identity-provider.md)).
-Point the two `NEXT_PUBLIC_SUPABASE_*` variables at a real Supabase project when
-there is one; nothing else changes.
+One command, no hosted services, sign-in included:
 
 ```bash
-brew install postgresql@17 pgvector && brew services start postgresql@17
 createdb loupe_dev
 DATABASE_URL=postgres://localhost:5432/loupe_dev ./db/migrate.sh
+psql postgres://localhost:5432/loupe_dev -f db/seed/0001_demo_catalogue.sql
+(cd web && pnpm install)
+./dev.sh
 ```
 
-```bash
-cd web && pnpm install && pnpm dev
-```
+That starts the web app, the API, the AI service and a development identity
+provider, and prints a URL. `./dev.sh --stop` stops them.
 
-Visit `/system` to see the design tokens in both themes. Copy `.env.example` and
-fill in the Supabase keys to enable sign-in.
+Needs Node 22+, pnpm, Python 3.11+, uv, and Postgres 17 with pgvector. Full
+walkthrough, including indexing the transcripts and swapping in a real Supabase
+project: [`docs/running.md`](docs/running.md).
+
+## Deploying it
+
+The web app is on Vercel. Nothing else is deployed yet, which is why the staging
+URL browses and does not do anything.
+
+`render.yaml` is a Blueprint covering the API, the AI service, the media
+service, and the ingest and pipeline crons. Step-by-step, with what each step
+unblocks and the two free-tier behaviours that otherwise look like bugs:
+[`docs/deploying.md`](docs/deploying.md).
+
+Four accounts are needed and none can be created on your behalf: Supabase
+(database and auth in one free tier), Render, Vercel, and optionally Bunny for
+uploads.
+
+The single most likely thing to be wrong after a first deploy is `CORS_ORIGINS`.
+Missing CORS is how comments, likes, saves and progress writes shipped broken
+for four phases with every server-side test passing, and the symptom is a
+browser console full of preflight failures while `curl` works perfectly.
 
 ## Repository layout
 
@@ -162,6 +176,8 @@ services/auth/    Development-only identity provider. Refuses to start outside
 services/eval/    Golden set, metrics, and the evaluation runner
 services/recsys/  Personas, candidate generation, ranking, offline evaluation
 db/               SQL migrations, constraint tests, migration runner
+dev.sh            Starts everything locally
+render.yaml       Render Blueprint for the API and workers
 docs/             Plan, architecture writeup, decisions, ADRs, evaluation
 ```
 

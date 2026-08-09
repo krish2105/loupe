@@ -1,0 +1,189 @@
+# Render Blueprint — the API and workers.
+#
+# §14 puts the web app on Vercel and everything long-running on Render or Fly,
+# because the pipeline and the ingest worker are processes rather than request
+# handlers and do not fit a serverless model.
+#
+# Four things are true about this file and worth stating before the YAML.
+#
+# services/auth is deliberately absent. It is a development identity provider
+# (ADR 0004) and it refuses to start unless ENVIRONMENT=local, so deploying it
+# would produce a service that crash-loops. That is the intended outcome, but
+# the honest version is not to list it at all.
+#
+# Every secret is `sync: false`, which is Render's way of saying "prompt the
+# operator, never store it here". §14: nothing in the repository, ever.
+#
+# The database is not defined here. It is Supabase Postgres, because the app
+# needs pgvector and the same instance backs Supabase Auth. Render's own
+# Postgres has no pgvector on the free tier.
+#
+# Free instances sleep after inactivity and take a few seconds to wake. That is
+# fine for everything here except a demo, and it is the reason the cost line in
+# the README says $0–7 rather than $0.
+
+services:
+  # ------------------------------------------------------------ core API ----
+  - type: web
+    name: loupe-api
+    runtime: python
+    plan: free
+    region: frankfurt
+    rootDir: services/api
+    buildCommand: pip install uv && uv sync --frozen --no-dev
+    startCommand: uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: PYTHON_VERSION
+        value: "3.12"
+      # The pooler URL, not the direct one. Render's free instances open a new
+      # connection per cold start and Supabase's direct limit is small.
+      - key: DATABASE_URL
+        sync: false
+      # Supabase → Project Settings → API → JWT Secret. The API verifies access
+      # tokens with this locally, so a progress write every ten seconds costs no
+      # round trip.
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      # The deployed web origin. Without it every browser call fails preflight,
+      # which is exactly how Phase 2 through Phase 5 shipped with no CORS at all
+      # and passing server-side tests.
+      - key: CORS_ORIGINS
+        sync: false
+      # Filled by hand with the AI service's URL, e.g.
+      # https://loupe-ai.onrender.com. Render can wire this from another
+      # service, but only as `host:port` with no scheme, and the API builds a
+      # URL from it — so a declarative link here produces a value that looks
+      # right and does not resolve.
+      - key: AI_SERVICE_URL
+        sync: false
+
+  # -------------------------------------------------------------- AI ---------
+  # The only service that holds a model key or contains a prompt (§5).
+  - type: web
+    name: loupe-ai
+    runtime: python
+    plan: free
+    region: frankfurt
+    rootDir: services/ai
+    # The embedding model is ~2GB and does not fit a free instance's disk or
+    # memory. Deployed without it, retrieval falls back to the deterministic
+    # embedder and semantic search degrades to keyword — which the API reports
+    # in its `mode` field rather than hiding. Set USE_REAL_EMBEDDINGS=true and
+    # move to a paid instance to change that.
+    buildCommand: pip install uv && uv sync --frozen --no-dev
+    startCommand: uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: PYTHON_VERSION
+        value: "3.12"
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: USE_REAL_EMBEDDINGS
+        value: "false"
+      # Optional. Absent, answers are extractive: every sentence is one the
+      # speaker actually said, which is a defensible baseline rather than a
+      # degraded mode.
+      - key: GEMINI_API_KEY
+        sync: false
+
+  # ------------------------------------------------------------- media -------
+  # The sole holder of provider credentials (§5). Nothing else has ever seen a
+  # Bunny key, and this deployment is what keeps that true.
+  - type: web
+    name: loupe-media
+    runtime: python
+    plan: free
+    region: frankfurt
+    rootDir: services/media
+    buildCommand: pip install uv && uv sync --frozen --no-dev
+    startCommand: uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: PYTHON_VERSION
+        value: "3.12"
+      - key: DATABASE_URL
+        sync: false
+      - key: BUNNY_LIBRARY_ID
+        sync: false
+      - key: BUNNY_API_KEY
+        sync: false
+      - key: BUNNY_PULL_ZONE
+        sync: false
+      # Signs playback URLs. Separate from the API key on purpose: one signs
+      # management calls, the other signs what the public fetches.
+      - key: BUNNY_TOKEN_KEY
+        sync: false
+      # Bunny does not sign Stream webhooks, so the endpoint sits behind an
+      # unguessable path segment. openssl rand -hex 32
+      - key: WEBHOOK_SECRET
+        sync: false
+
+  # ------------------------------------------------------------ ingest -------
+  # §4.2 rule 1: a nightly batch, never a runtime call, and never the third
+  # party's search endpoint. A cron job rather than a worker, because "runs once
+  # a night" is a schedule and not a process.
+  - type: cron
+    name: loupe-ingest
+    runtime: python
+    plan: free
+    region: frankfurt
+    rootDir: services/ingest
+    schedule: "17 3 * * *"
+    buildCommand: pip install uv && uv sync --frozen --no-dev
+    startCommand: uv run python -m app.run
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: PYTHON_VERSION
+        value: "3.12"
+      - key: DATABASE_URL
+        sync: false
+      # Empty selects the fixture provider, which is what the deployed
+      # catalogue currently runs on. Set it and the same code walks real
+      # channels.
+      - key: YOUTUBE_API_KEY
+        sync: false
+      # Far below the real 10,000/day, so a runaway loop hits our ceiling first.
+      - key: DAILY_QUOTA_UNITS
+        value: "2000"
+      - key: MAX_PAGES_PER_CHANNEL
+        value: "2"
+
+  # ---------------------------------------------------------- pipeline -------
+  # Resumable by design (§10.1), so running it on a schedule loses nothing: each
+  # run claims whatever is eligible and a re-run over finished work is free.
+  #
+  # USE_REAL_MODELS stays false here. Whisper on a free instance is neither fast
+  # enough nor large enough, and §10.3 puts the real backfill on free GPU
+  # compute as a batch, loaded in afterwards.
+  - type: cron
+    name: loupe-pipeline
+    runtime: python
+    plan: free
+    region: frankfurt
+    rootDir: services/pipeline
+    schedule: "*/30 * * * *"
+    buildCommand: pip install uv && uv sync --frozen --no-dev
+    startCommand: uv run python -m app.run --all
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: PYTHON_VERSION
+        value: "3.12"
+      - key: DATABASE_URL
+        sync: false
+      - key: USE_REAL_MODELS
+        value: "false"
+      # §10.3: the transcription cost ceiling, enforced by code rather than by
+      # discipline. The worker reads it before claiming a job.
+      - key: TRANSCRIPTION_MINUTES_CAP
+        value: "3000"
