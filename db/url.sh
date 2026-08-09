@@ -43,16 +43,36 @@ fi
 
 ENCODED="$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$PASSWORD")"
 
-# Every placeholder Supabase or this project has used.
-URL="$TEMPLATE"
-for placeholder in '[YOUR-PASSWORD]' 'YOUR-PASSWORD' 'YOURPASSWORD' '<password>' '[PASSWORD]'; do
-  URL="${URL//"$placeholder"/$ENCODED}"
-done
+# Replace whatever is sitting in the password position, whether that is a
+# placeholder, a stale password, or an unencoded one.
+#
+# The first version only substituted known placeholders and refused otherwise,
+# which failed on the very next attempt: the URI had a real password in it
+# already and the script said it could not find a placeholder, which is true and
+# useless. The password position is unambiguous — between the first colon after
+# the scheme and the last @ before the host — so there is no need to guess.
+URL="$(TEMPLATE="$TEMPLATE" ENCODED="$ENCODED" python3 - <<'PYTHON'
+import os
+import sys
 
-if [[ "$URL" == "$TEMPLATE" ]]; then
-  echo "No password placeholder found in that URI — nothing was substituted." >&2
-  echo "Paste it exactly as Supabase prints it, with [YOUR-PASSWORD] left in." >&2
-  exit 2
-fi
+template = os.environ["TEMPLATE"]
+encoded = os.environ["ENCODED"]
+
+if "://" not in template:
+    sys.exit("That does not look like a connection URI (no scheme).")
+
+scheme, rest = template.split("://", 1)
+
+if "@" not in rest:
+    sys.exit("That URI has no user@host part, so there is nowhere to put a password.")
+
+# rsplit: a password may itself contain an @ if it was pasted unencoded, and the
+# host is always after the last one.
+credentials, host = rest.rsplit("@", 1)
+user = credentials.split(":", 1)[0]
+
+print(f"{scheme}://{user}:{encoded}@{host}")
+PYTHON
+)"
 
 printf '%s\n' "$URL"
