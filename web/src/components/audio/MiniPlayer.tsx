@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
+import { ownsItsOwnPlayer } from "./player-ownership";
 import { Icon } from "@/components/shell/Icon";
 import { useHls } from "@/components/player/useHls";
 import { usePlayerControls, usePlayerState } from "@/components/player/PlayerContext";
@@ -28,11 +30,28 @@ import { cn, formatTimecode } from "@/lib/utils";
  * element gets you native HLS on Safari and silence everywhere else. It renders
  * at zero size, which is the standard way to do this and is not a workaround
  * for anything.
+ *
+ * It renders nothing at all on routes that own their own player, and that is
+ * the fix for a real bug rather than a preference.
+ *
+ * There is one player store (§5.1) and `attach` replaces whatever was bound to
+ * it. The bar is rendered after the page in the root layout, so on a video page
+ * it attached *second* and quietly took playback over: two <video> elements on
+ * screen, one of them 0×0, and every control driving the hidden one. The
+ * visible player sat at 0:00 while audio played from nowhere, and on browsers
+ * without native HLS the second attach broke it outright with "this talk will
+ * not play in your browser".
+ *
+ * The earlier note here claimed the opposite — that opening a talk takes
+ * playback over from audio. That is the behaviour people expect and it is not
+ * what the code did, because mount order decides and the bar mounts last.
+ * Standing aside is what makes the expected behaviour true.
  */
 
 const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
 export function MiniPlayer() {
+  const pathname = usePathname();
   const { current, state, upcoming } = useQueueState();
   const { next, previous, toggleShuffle, cycleRepeat } = useQueueControls();
   const queueStore = useQueueStore();
@@ -50,7 +69,8 @@ export function MiniPlayer() {
   const { attach, toggle, seek, nudge, setRate } = usePlayerControls();
   const { currentTime, duration, isPlaying, rate } = usePlayerState();
 
-  useHls(mediaRef, current?.src ?? "", mounted && Boolean(current));
+  const owned = ownsItsOwnPlayer(pathname);
+  useHls(mediaRef, owned ? "" : (current?.src ?? ""), mounted && Boolean(current) && !owned);
   useProgressReporting(current?.id ?? null);
   usePlayhead(queueStore, current?.id ?? null);
   useMediaSession();
@@ -73,7 +93,9 @@ export function MiniPlayer() {
 
 
 
-  if (!current) return null;
+  // Hooks all run first; only the render is skipped. Returning before them
+  // would change the hook order between routes.
+  if (!current || ownsItsOwnPlayer(pathname)) return null;
 
   const progress = duration > 0 ? currentTime / duration : 0;
 
