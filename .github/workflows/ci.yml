@@ -37,9 +37,42 @@ jobs:
   api:
     name: API
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: loupe_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/loupe_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      # The watch-event and resume tests run against a real database. They skip
+      # without one, and a silently skipped test proves nothing.
+      - name: Apply migrations
+        run: ./db/migrate.sh
+      - run: uv sync --all-groups
+        working-directory: services/api
+      - run: uv run ruff check .
+        working-directory: services/api
+      - run: uv run pytest -q
+        working-directory: services/api
+
+  media:
+    name: Media
+    runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: services/api
+        working-directory: services/media
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -84,4 +117,4 @@ jobs:
           echo "$output" | grep -q "FAIL" && exit 1
           count=$(echo "$output" | grep -c "PASS")
           echo "$count constraint assertions passed"
-          [ "$count" -ge 16 ] || { echo "expected at least 16 assertions"; exit 1; }
+          [ "$count" -ge 19 ] || { echo "expected at least 19 assertions"; exit 1; }

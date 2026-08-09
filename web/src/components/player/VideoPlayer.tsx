@@ -6,6 +6,7 @@ import { usePlayerControls, usePlayerState } from "./PlayerContext";
 import type { Chapter } from "./Scrubber";
 import { isTypingTarget, keyToAction } from "./keyboard";
 import { useHls } from "./useHls";
+import { useProgressReporting } from "./useProgressReporting";
 import { cn, formatTimecode } from "@/lib/utils";
 
 /**
@@ -23,6 +24,7 @@ export function VideoPlayer({
   chapters,
   marks,
   resumeAtSec,
+  videoId = null,
 }: {
   src: string;
   poster?: string;
@@ -31,6 +33,8 @@ export function VideoPlayer({
   marks?: number[];
   /** A prior position, if one is worth offering. Computed server-side. */
   resumeAtSec?: number;
+  /** Omit for content with no history to keep — the demo route, or a preview. */
+  videoId?: string | null;
 }) {
   // The element lives in a ref because attaching a stream mutates it. `mounted`
   // is what actually re-runs the effects once the ref is populated.
@@ -46,6 +50,9 @@ export function VideoPlayer({
   const { attach, seek, toggle, nudge } = usePlayerControls();
   const { duration, isReady } = usePlayerState();
   const { status, level } = useHls(videoRef, src, mounted);
+
+  // §9.1 progress writes. Subscribes imperatively, so this costs no renders.
+  useProgressReporting(videoId);
 
   const [resumeOffer, setResumeOffer] = useState<number | null>(
     resumeAtSec && resumeAtSec > 10 ? resumeAtSec : null,

@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     database_url: str = "postgres://localhost:5432/loupe_dev"
     environment: str = "local"
 
+    # Supabase signs access tokens with this. Verifying locally avoids a network
+    # round-trip on every history write, which happens every ten seconds of
+    # playback per viewer.
+    supabase_jwt_secret: str = ""
+
     # §10.3: the transcription cost ceiling is enforced by code, not discipline.
     # The worker reads this before starting a job and refuses when it is spent.
     transcription_minutes_cap: int = 3000

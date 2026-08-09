@@ -37,6 +37,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   return <PlayerContext value={store}>{children}</PlayerContext>;
 }
 
+/**
+ * The raw store, for callers that need to observe playback without rendering
+ * it — progress reporting being the case this exists for. Subscribing through
+ * usePlayerState() there would re-render the whole video page several times a
+ * second to feed a network write nobody looks at.
+ */
+export function usePlayerStore(): PlayerStore {
+  return useStore();
+}
+
 function useStore(): PlayerStore {
   const store = useContext(PlayerContext);
   if (!store) {

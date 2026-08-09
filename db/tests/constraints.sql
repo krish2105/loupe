@@ -89,6 +89,33 @@ SELECT assert_rejects($$
   DELETE FROM watch_events WHERE user_id = 'cccccccc-cccc-cccc-cccc-cccccccccccc'
 $$, '§6.5 watch_events rejects DELETE');
 
+-- 0007: append-only must not make account deletion impossible. A row-level
+-- DELETE trigger fires on cascades too, so this is tested on a throwaway video
+-- rather than the one later assertions depend on.
+INSERT INTO videos (id, source_class, channel_id, title, processing_status) VALUES
+  ('a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1', 'owned',
+   '11111111-1111-1111-1111-111111111111', 'Doomed talk', 'indexed');
+INSERT INTO watch_events (user_id, video_id, position_sec, watch_pct)
+VALUES ('cccccccc-cccc-cccc-cccc-cccccccccccc',
+        'a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1', 30, 0.2);
+
+SELECT assert_rejects($$
+  DELETE FROM videos WHERE id = 'a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1'
+$$, '0007 a cascading delete is blocked without the purge opt-in');
+
+SELECT set_config('loupe.allow_purge', 'on', true);
+
+SELECT assert_rejects($$
+  UPDATE watch_events SET position_sec = 1
+  WHERE video_id = 'a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1'
+$$, '0007 UPDATE stays blocked even during an authorised purge');
+
+SELECT assert_accepts($$
+  DELETE FROM videos WHERE id = 'a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1'
+$$, '0007 an authorised purge cascades successfully');
+
+SELECT set_config('loupe.allow_purge', 'off', true);
+
 -- --------------------------------------- §6.2 — one comment reply level ---
 INSERT INTO comments (id, video_id, user_id, body) VALUES
   ('dddddddd-dddd-dddd-dddd-dddddddddddd', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',

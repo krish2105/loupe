@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from uuid import UUID
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException, Response
+from pydantic import BaseModel, Field
 
 from . import db
+from .auth import require_user_id
 from .config import settings
 
 """
@@ -84,3 +87,99 @@ async def pipeline_stages() -> dict[str, object]:
         "stages": {row["stage"]: row["count"] for row in rows},
         "database": "ok",
     }
+
+
+class WatchEvent(BaseModel):
+    video_id: UUID
+    position_sec: int = Field(ge=0)
+    watch_pct: float = Field(ge=0, le=1)
+    completed: bool = False
+
+
+@app.post("/v1/watch-events", status_code=204)
+async def record_watch_event(
+    event: WatchEvent,
+    user_id: UUID = Depends(require_user_id),
+) -> Response:
+    """
+    Append one watch event (§9.1).
+
+    Append-only by §6.5: this never updates a row. Resume position is derived
+    on read instead, which is what keeps the table usable as recommendation
+    training data later rather than requiring a schema migration to get the
+    history back.
+
+    Returns 204 because the client fires these and does not wait — a body would
+    be read by nobody.
+    """
+    pool = db.pool()
+    if pool is None:
+        raise HTTPException(status_code=503, detail="Database unavailable.")
+
+    try:
+        async with pool.acquire() as connection:
+            await connection.execute(
+                """
+                INSERT INTO watch_events
+                    (user_id, video_id, position_sec, watch_pct, completed)
+                VALUES ($1, $2, $3, $4, $5)
+                """,
+                user_id,
+                event.video_id,
+                event.position_sec,
+                event.watch_pct,
+                event.completed,
+            )
+    except Exception as error:
+        # A foreign key violation here means an unknown video or user, which is
+        # a client error rather than a server fault.
+        if "foreign key" in str(error).lower():
+            raise HTTPException(status_code=404, detail="Unknown video.")
+        raise
+
+    return Response(status_code=204)
+
+
+# §9.1: resume when a prior event exists past ten seconds and under 95%.
+RESUME_MIN_SEC = 10
+RESUME_MAX_PCT = 0.95
+
+
+@app.get("/v1/videos/{video_id}/resume")
+async def resume_position(
+    video_id: UUID,
+    user_id: UUID = Depends(require_user_id),
+) -> dict[str, object]:
+    """
+    Where to pick this talk up, if anywhere.
+
+    A read-side aggregate over the append-only log (§6.5). The most recent
+    event wins; the thresholds keep the offer off talks barely started or
+    effectively finished, because a resume prompt at four seconds in is noise.
+    """
+    pool = db.pool()
+    if pool is None:
+        raise HTTPException(status_code=503, detail="Database unavailable.")
+
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            """
+            SELECT position_sec, watch_pct, completed
+            FROM watch_events
+            WHERE user_id = $1 AND video_id = $2
+            ORDER BY occurred_at DESC, id DESC
+            LIMIT 1
+            """,
+            user_id,
+            video_id,
+        )
+
+    if (
+        row is None
+        or row["completed"]
+        or row["position_sec"] <= RESUME_MIN_SEC
+        or row["watch_pct"] >= RESUME_MAX_PCT
+    ):
+        return {"position_sec": None}
+
+    return {"position_sec": row["position_sec"]}

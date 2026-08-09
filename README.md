@@ -38,13 +38,18 @@ constraints reject it. See [`db/tests/constraints.sql`](db/tests/constraints.sql
 
 | Area | State |
 |---|---|
-| Database schema | All §6 entities, 6 migrations, 16 constraint assertions passing |
+| Database schema | All §6 entities, 7 migrations, 19 constraint assertions passing |
 | Design system | Six tokens, two independently designed themes, visible at `/system` |
-| Player abstraction | Seek/play/pause/time store with 8 passing tests |
+| Player | Adaptive HLS, chapter-segmented scrubber, §9.1 keyboard, resume |
+| Player abstraction | Seek/play/pause/time store, verified against a real stream |
+| Progress + resume | Append-only writes with JWT auth; endpoints tested against Postgres |
+| Media service | Bunny upload signing, webhook, signed playback URLs — **provider calls unverified** |
 | Auth | Supabase Auth wired; **unverified — needs provisioning** |
-| Core API | FastAPI skeleton, health and pipeline-stage endpoints |
-| CI | Web, API, and schema jobs — all green |
+| Core API | FastAPI, health, pipeline stages, watch events, resume |
+| CI | Web, API, media, and schema jobs |
 | Staging deploy | Live at [web-jade-two-b023n56l0y.vercel.app](https://web-jade-two-b023n56l0y.vercel.app) |
+
+Test counts: 22 web, 14 API, 12 media, 19 schema assertions.
 
 ## Running it
 
@@ -68,12 +73,15 @@ fill in the Supabase keys to enable sign-in.
 ```
 web/              Next.js app — all UI, routing, session
 services/api/     FastAPI core API — CRUD, feed assembly, search orchestration
+services/media/   Upload signing, provider webhooks, playback URL signing
 db/               SQL migrations, constraint tests, migration runner
 docs/             Plan, decisions, ADRs, design direction
 ```
 
 The §5 service boundaries hold from Phase 0: the core API never holds media
-provider credentials and never calls an LLM.
+provider credentials and never calls an LLM, and the media service is the only
+thing that has ever seen a Bunny key. A playback URL leaves that service already
+signed, so swapping providers touches one directory.
 
 ## Design
 
@@ -129,8 +137,13 @@ Recorded as they are incurred, per the working agreement.
   data itself via `watch_events.is_synthetic`, not only in prose.
 - **`loupe.video` is unverified.** DNS suggests it is unregistered. Not confirmed
   at a registrar, and not purchased.
-- **Media provider unsettled.** §5.2 chose Bunny Stream; that choice is under
-  review. See [ADR 0001](docs/adr/0001-media-provider.md).
+- **Bunny integration is written but never executed.** The signing functions are
+  tested against independently computed vectors, because a wrong signature
+  surfaces only as a CDN 403 with no diagnostic. The API calls themselves have
+  never run — no credentials exist yet.
+- **Progress writes have not run end to end.** The endpoints are tested against
+  a real Postgres and the throttling logic is tested in isolation, but the
+  browser has never sent one, because that needs a signed-in session.
 - **No staging deploy yet**, so the performance targets (LCP under 2.5s, player
   time-to-first-frame under 1.5s) are unmeasured.
 
