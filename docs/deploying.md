@@ -46,6 +46,20 @@ Test it before pasting it anywhere:
 psql "postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres" -c "SELECT 1"
 ```
 
+**The IPv6 notice can be ignored.** The dialog warns that the transaction
+pooler uses IPv6 by default and offers a paid IPv4 add-on. The *shared* pooler
+host resolves to IPv4 as well — `aws-0-ap-southeast-2.pooler.supabase.com`
+returns three A records and accepts connections on 6543 — so GitHub runners and
+Render instances, which are IPv4-only, reach it without the add-on. Check for
+yourself before paying for it:
+
+```bash
+dig +short aws-0-<region>.pooler.supabase.com A
+```
+
+Addresses in the output mean IPv4 works. The warning applies to the **direct**
+connection, which genuinely is IPv6-only.
+
 **Which pooler.** Transaction (6543) is right for both the Render web services
 and the GitHub Actions jobs: it survives cold starts and short-lived connections,
 which is what both are. Session pooler (5432) holds a real backend connection per
@@ -114,7 +128,12 @@ One account covers both, which is the reason §14 chose it: the app needs
 pgvector and it needs a GoTrue instance, and this is one free tier providing
 both.
 
-1. Create a project. Note the region — put Render in the same one.
+1. Create a project. **Note the region.** Every API request makes several
+   database round trips, so a service on the wrong continent pays that latency
+   several times over on every page. `render.yaml` is set to `singapore`, which
+   is the nearest Render region to `ap-southeast-2`; change it in all three
+   services if your project is elsewhere. Render offers oregon, ohio, virginia,
+   frankfurt and singapore.
 2. Enable pgvector: **Database → Extensions → vector**.
 3. Apply the schema, using the **pooler** connection string:
 

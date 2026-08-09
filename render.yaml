@@ -34,6 +34,13 @@
 # Free instances sleep after inactivity and take a few seconds to wake. That is
 # fine for everything here except a demo, and it is the reason the cost line in
 # the README says $0–7 rather than $0.
+#
+# `region` must be the one nearest the Supabase project, and it is set here for
+# a project in ap-southeast-2. Every request this API serves makes several
+# database round trips, so a service on the wrong continent pays that latency
+# several times over on every page. Render offers oregon, ohio, virginia,
+# frankfurt and singapore; pick whichever is closest to the database and change
+# it in all three services together.
 
 services:
   # ------------------------------------------------------------ core API ----
@@ -41,7 +48,7 @@ services:
     name: loupe-api
     runtime: python
     plan: free
-    region: frankfurt
+    region: singapore
     rootDir: services/api
     buildCommand: pip install uv && uv sync --frozen --no-dev
     startCommand: uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
@@ -79,7 +86,7 @@ services:
     name: loupe-ai
     runtime: python
     plan: free
-    region: frankfurt
+    region: singapore
     rootDir: services/ai
     # The embedding model is ~2GB and does not fit a free instance's disk or
     # memory. Deployed without it, retrieval falls back to the deterministic
@@ -113,7 +120,7 @@ services:
     name: loupe-media
     runtime: python
     plan: free
-    region: frankfurt
+    region: singapore
     rootDir: services/media
     buildCommand: pip install uv && uv sync --frozen --no-dev
     startCommand: uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
