@@ -179,7 +179,8 @@ services/auth/    Development-only identity provider. Refuses to start outside
                   ENVIRONMENT=local. See ADR 0004
 services/eval/    Golden set, metrics, and the evaluation runner
 services/recsys/  Personas, candidate generation, ranking, offline evaluation
-db/               SQL migrations, constraint tests, migration runner
+db/               SQL migrations, constraint tests, migration runner,
+                  and setup-hosted.sh for preparing a hosted database
 dev.sh            Starts everything locally
 render.yaml       Render Blueprint for the three web services
 docs/             Plan, architecture writeup, decisions, ADRs, evaluation

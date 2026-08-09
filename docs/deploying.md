@@ -135,27 +135,23 @@ both.
    services if your project is elsewhere. Render offers oregon, ohio, virginia,
    frankfurt and singapore.
 2. Enable pgvector: **Database → Extensions → vector**.
-3. Apply the schema, using the **pooler** connection string:
+3. Prepare the database in one command:
 
    ```bash
-   DATABASE_URL="postgres://postgres.<ref>:<password>@<region>.pooler.supabase.com:6543/postgres" \
-     ./db/migrate.sh
-
-   psql "$DATABASE_URL" -f db/migrations/supabase/0001_auth_link.sql
+   ./db/setup-hosted.sh "postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres" --seed
    ```
 
-   The second file is the hosted-only foreign key from `users` to `auth.users`.
-   It is separate because local development has no `auth` schema, and a
-   migration that only runs in one environment should say so by being a
-   different file.
+   It checks the connection, enables pgvector, applies every migration, applies
+   the hosted-only link from `users` to `auth.users`, and with `--seed` loads a
+   catalogue. It never prints the URL, because that contains a password and a
+   terminal is a log.
 
-4. Optionally seed a catalogue so the deployment is not empty:
+   The auth link is a separate file rather than a migration in the chain because
+   local development has no `auth` schema, and a migration that only runs in one
+   environment should say so by being a different file.
 
-   ```bash
-   psql "$DATABASE_URL" -f db/seed/0001_demo_catalogue.sql
-   psql "$DATABASE_URL" -f db/seed/0002_shorts.sql
-   psql "$DATABASE_URL" -f db/seed/0003_audio.sql
-   ```
+   Quote the URL. Passwords contain characters the shell would otherwise
+   interpret.
 
 Collect three values from **Project Settings → API**: the project URL, the anon
 key, and the JWT secret.
