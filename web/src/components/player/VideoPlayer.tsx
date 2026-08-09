@@ -141,7 +141,11 @@ export function VideoPlayer({
       />
 
       {status === "error" && (
-        <div className="absolute inset-0 grid place-content-center px-6 text-center">
+        // Over `bg-black`, so a dark context in both themes — the same reason
+        // the controls redefine these. Inheriting the page's tokens rendered
+        // this message near-black on black whenever the light theme was on,
+        // which is to say the failure state failed.
+        <div className="absolute inset-0 grid place-content-center px-6 text-center [--ink:#f2f2f3] [--muted:#a9a9ad]">
           <p className="text-(length:--step-0) text-ink">
             This talk will not play in your browser.
           </p>

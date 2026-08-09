@@ -59,6 +59,25 @@ export function PlayerControls({
         "absolute inset-x-0 bottom-0 z-10",
         "bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-8",
         "backdrop-blur-[2px]",
+        /**
+         * The chrome is a dark context in both themes, because it sits on a
+         * black scrim over video no matter what the page around it is doing.
+         *
+         * Without this every control here inherited the page's `--ink`, which
+         * in light mode is #0f0f10 — near-black type on a near-black gradient.
+         * The play button, the timecode, the quality control and the
+         * full-screen button were all invisible in light theme, and had been
+         * since the controls were built, because the player was only ever
+         * looked at in the dark.
+         *
+         * Redefining the token rather than swapping each class means every
+         * child keeps reading `text-ink` and needs no change. It is scoped to
+         * the chrome rather than to the whole player, because the resume notice
+         * floats over the same video on its own `bg-surface` and does want the
+         * page's tokens — a container-wide override would need it to opt back
+         * out, and there is no non-circular way to say "whatever the page said".
+         */
+        "[--ink:#f2f2f3]",
       )}
     >
       <Scrubber chapters={chapters} />
