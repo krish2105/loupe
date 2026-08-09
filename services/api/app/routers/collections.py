@@ -4,10 +4,13 @@ import json
 from dataclasses import dataclass
 from uuid import UUID
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from .. import db
 from ..auth import require_user_id
+from ..config import settings
 from .catalogue import VIDEO_COLUMNS, serialise
 
 """
@@ -235,25 +238,37 @@ async def notifications(
     """
     §6.2: fan-out on write, so this is a plain read of one person's rows.
 
-    Nothing writes notifications yet — that arrives with the ingest worker,
-    which is what creates new-upload events. The surface is real and simply
-    empty, which is the honest state rather than a placeholder.
+    The rows are written by database triggers (migration 0009) rather than by
+    this service, because three different writers create notifiable events — the
+    pipeline flipping a talk to transcoded, the nightly ingest worker inserting
+    Class B rows, and comment replies — and only the last of those passes
+    through here.
     """
     pool = require_pool()
 
     rows = await pool.fetch(
         """
         SELECT n.id, n.kind::text AS kind, n.target_id, n.created_at, n.read_at,
-               v.title AS target_title, c.name AS channel_name, c.handle AS channel_handle
+               v.title AS target_title, c.name AS channel_name, c.handle AS channel_handle,
+               a.display_name AS actor_name
         FROM notifications n
         LEFT JOIN videos v ON v.id = n.target_id
         LEFT JOIN channels c ON c.id = v.channel_id
+        LEFT JOIN users a ON a.id = n.actor_id
         WHERE n.user_id = $1
         ORDER BY n.created_at DESC
         LIMIT $2
         """,
         user_id,
         limit,
+    )
+
+    # Counted rather than summed over the page. Summing would report at most
+    # `limit` for anyone with a backlog, and zero for anyone whose unread rows
+    # had already scrolled past it.
+    unread = await pool.fetchval(
+        "SELECT count(*) FROM notifications WHERE user_id = $1 AND read_at IS NULL",
+        user_id,
     )
 
     return {
@@ -265,13 +280,38 @@ async def notifications(
                 "target_title": row["target_title"],
                 "channel_name": row["channel_name"],
                 "channel_handle": row["channel_handle"],
+                "actor_name": row["actor_name"],
                 "created_at": row["created_at"].isoformat(),
                 "read": row["read_at"] is not None,
             }
             for row in rows
         ],
-        "unread": sum(1 for row in rows if row["read_at"] is None),
+        "unread": unread,
     }
+
+
+@router.post("/notifications/read")
+async def mark_notifications_read(
+    user_id: UUID = Depends(require_user_id),
+) -> dict[str, object]:
+    """
+    Mark everything read, which is what opening the page means.
+
+    Per-item read state was considered and dropped. The only place a
+    notification is ever displayed is this page, so recording which individual
+    rows were looked at would store a distinction nothing can act on. The unread
+    flag stays per row, so anything that arrives while the page is open is still
+    marked when it does.
+    """
+    pool = require_pool()
+
+    marked = await pool.execute(
+        "UPDATE notifications SET read_at = now() WHERE user_id = $1 AND read_at IS NULL",
+        user_id,
+    )
+
+    # asyncpg returns the command tag, e.g. "UPDATE 3".
+    return {"marked_read": int(marked.rsplit(" ", 1)[-1])}
 
 
 @router.get("/channels")
@@ -512,7 +552,14 @@ async def playlist_detail(
     items = await load_collection(
         pool,
         """
-        SELECT pi.video_id, pi.position AS sort_key, '{}'::jsonb AS context
+        SELECT pi.video_id, pi.position AS sort_key,
+               -- The matched moment rides in `context`, which is what the shared
+               -- abstraction provides it for. Stripping nulls means a hand-made
+               -- playlist carries no empty keys for the UI to test against.
+               jsonb_strip_nulls(jsonb_build_object(
+                 'start_sec', pi.start_sec,
+                 'note', pi.note
+               )) AS context
         FROM playlist_items pi
         WHERE pi.playlist_id = $1
         """,
@@ -576,3 +623,105 @@ async def remove_from_playlist(
         playlist_id,
         video_id,
     )
+
+
+class PlaylistBrief(BaseModel):
+    brief: str = Field(min_length=8, max_length=300)
+    limit: int = Field(default=8, ge=3, le=12)
+
+
+@router.post("/playlists/compose", status_code=201)
+async def compose_playlist(
+    payload: PlaylistBrief, user_id: UUID = Depends(require_user_id)
+) -> dict[str, object]:
+    """
+    §11 AI playlists. A brief in, a real saved playlist out.
+
+    The composition happens in the AI service, which owns every prompt and every
+    model call (§5). This service does what it owns: authorising the caller,
+    writing the rows, and deciding what a refusal means to a client. Splitting it
+    this way is why the AI service never needs to verify a session token.
+
+    A refusal is a 200, not an error. "Nothing in the catalogue covers this well
+    enough" is a successful, correct answer to the brief — the same judgement
+    ask-video makes — and a 4xx would make the client render it as a fault.
+    """
+    pool = require_pool()
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{settings.ai_service_url}/v1/playlists/compose",
+                json={"brief": payload.brief, "limit": payload.limit},
+            )
+    except httpx.HTTPError as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Playlist composition is unavailable. Try again shortly.",
+        ) from error
+
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=502, detail="Playlist composition failed upstream."
+        )
+
+    proposal = response.json()
+    if proposal.get("refused"):
+        return {"refused": True, "reason": proposal.get("reason")}
+
+    items = proposal["items"]
+
+    # One transaction: a playlist that exists with no items, or with a rationale
+    # describing talks it does not contain, is worse than no playlist. The
+    # position unique constraint is deferrable, so the inserts can run in order
+    # without an intermediate conflict.
+    try:
+        async with pool.acquire() as connection:
+            async with connection.transaction():
+                playlist_id = await connection.fetchval(
+                    """
+                    INSERT INTO playlists (owner_id, title, generated_by, rationale)
+                    VALUES ($1, $2, 'ai', $3)
+                    RETURNING id
+                    """,
+                    user_id,
+                    proposal["title"],
+                    proposal["rationale"],
+                )
+
+                await connection.executemany(
+                    """
+                    INSERT INTO playlist_items
+                        (playlist_id, video_id, position, start_sec, note)
+                    VALUES ($1, $2::uuid, $3, $4, $5)
+                    """,
+                    [
+                        (
+                            playlist_id,
+                            item["video_id"],
+                            index,
+                            int(item["start_sec"]),
+                            item["excerpt"],
+                        )
+                        for index, item in enumerate(items)
+                    ],
+                )
+    except Exception as error:
+        # Retrieval and this write are separate queries against a catalogue that
+        # a nightly ingest run edits. A talk removed between them is rare and
+        # entirely possible, and it is worth a message someone can act on rather
+        # than an opaque failure.
+        if "foreign key" in str(error).lower():
+            raise HTTPException(
+                status_code=409,
+                detail="The catalogue changed while this was being composed. Try again.",
+            ) from error
+        raise
+
+    return {
+        "refused": False,
+        "id": str(playlist_id),
+        "title": proposal["title"],
+        "rationale": proposal["rationale"],
+        "item_count": len(items),
+    }

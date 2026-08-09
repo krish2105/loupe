@@ -16,11 +16,16 @@ export type CollectionKey =
   | "liked"
   | "subscriptions";
 
-/** Membership-specific extras. History carries a resume position. */
+/**
+ * Membership-specific extras. History carries a resume position; an AI-composed
+ * playlist carries the moment in the talk that matched the brief.
+ */
 export type ItemContext = {
   position_sec?: number;
   watch_pct?: number;
   completed?: boolean;
+  start_sec?: number;
+  note?: string;
 };
 
 export type CollectionItem = VideoSummary & { context?: ItemContext };
@@ -70,6 +75,16 @@ export type VideoState = {
 export const getVideoState = (videoId: string, token: string | null) =>
   authed<VideoState>(`/v1/me/state/${videoId}`, token);
 
+/**
+ * Where to pick a talk up, if anywhere (§9.1).
+ *
+ * A read-side aggregate over the append-only watch log, so the thresholds that
+ * decide whether a position is worth offering live in the API rather than being
+ * re-stated here.
+ */
+export const getResumePosition = (videoId: string, token: string | null) =>
+  authed<{ position_sec: number | null }>(`/v1/videos/${videoId}/resume`, token);
+
 export type SubscribedChannel = {
   id: string;
   handle: string;
@@ -79,6 +94,21 @@ export type SubscribedChannel = {
 
 export const getSubscribedChannels = (token: string | null) =>
   authed<{ items: SubscribedChannel[] }>("/v1/me/channels", token);
+
+export type Notification = {
+  id: string;
+  kind: "new_upload" | "reply" | "mention";
+  target_id: string;
+  target_title: string | null;
+  channel_name: string | null;
+  channel_handle: string | null;
+  actor_name: string | null;
+  created_at: string;
+  read: boolean;
+};
+
+export const getNotifications = (token: string | null) =>
+  authed<{ items: Notification[]; unread: number }>("/v1/me/notifications", token);
 
 export const getPlaylists = (token: string | null) =>
   authed<{ items: PlaylistSummary[] }>("/v1/me/playlists", token);

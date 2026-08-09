@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { MarkNode } from "@/components/mark/Mark";
+import { ComposePlaylist } from "@/components/playlists/ComposePlaylist";
 import { getPlaylists } from "@/lib/collections";
 import { getAccessToken } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
@@ -47,12 +48,14 @@ export default async function PlaylistsPage() {
     <div className="py-6">
       <h1 className="text-(length:--step-3)">Playlists</h1>
 
+      <ComposePlaylist />
+
       {items.length === 0 ? (
         <div className="mx-auto max-w-[46ch] py-24 text-center">
           <p className="text-(length:--step-1)">No playlists yet</p>
           <p className="mt-2 text-pretty text-(length:--step--1) text-muted">
-            Collect talks that belong together. Save one from any talk&rsquo;s
-            page.
+            Compose one from a brief above, or save a talk to a playlist from
+            its own page.
           </p>
         </div>
       ) : (

@@ -1,35 +1,31 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { MarkRead } from "@/components/notifications/MarkRead";
 import { Avatar } from "@/components/shell/Avatar";
-import { API_URL } from "@/lib/api";
+import { getNotifications, type Notification } from "@/lib/collections";
 import { getAccessToken } from "@/lib/supabase/server";
 import { cn, formatAge } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Notifications" };
 export const dynamic = "force-dynamic";
 
-type Notification = {
-  id: string;
-  kind: string;
-  target_id: string;
-  target_title: string | null;
-  channel_name: string | null;
-  created_at: string;
-  read: boolean;
-};
+/**
+ * What each kind of notification actually says.
+ *
+ * Written per §7.6: the sentence names the person or channel that acted and
+ * what they did, in that order, because that is the order someone scanning the
+ * list reads it in. A generic "you have a new notification" would make the list
+ * unreadable without opening every row.
+ */
+function describe(item: Notification) {
+  const who = item.kind === "reply" ? item.actor_name : item.channel_name;
+  const what = item.kind === "reply" ? "replied on" : "posted";
 
-async function getNotifications(token: string | null) {
-  if (!API_URL || !token) return null;
-  try {
-    const response = await fetch(`${API_URL}/v1/me/notifications`, {
-      cache: "no-store",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!response.ok) return null;
-    return (await response.json()) as { items: Notification[]; unread: number };
-  } catch {
-    return null;
-  }
+  return {
+    who: who ?? "Someone",
+    what,
+    title: item.target_title ?? "a talk",
+  };
 }
 
 export default async function NotificationsPage() {
@@ -60,6 +56,7 @@ export default async function NotificationsPage() {
 
   return (
     <div className="mx-auto max-w-[720px] py-6">
+      <MarkRead unread={data?.unread ?? 0} />
       <h1 className="text-(length:--step-3)">Notifications</h1>
 
       {items.length === 0 ? (
@@ -71,7 +68,10 @@ export default async function NotificationsPage() {
         </div>
       ) : (
         <ol className="mt-6 divide-y divide-rule">
-          {items.map((item) => (
+          {items.map((item) => {
+            const { who, what, title } = describe(item);
+
+            return (
             <li key={item.id}>
               <Link
                 href={`/watch/${item.target_id}`}
@@ -80,11 +80,10 @@ export default async function NotificationsPage() {
                   !item.read && "bg-brand-faint",
                 )}
               >
-                <Avatar name={item.channel_name ?? "?"} size={36} />
+                <Avatar name={who} size={36} />
                 <div className="min-w-0 flex-1">
                   <p className="text-(length:--step--1)">
-                    <span className="font-medium">{item.channel_name}</span>{" "}
-                    posted {item.target_title}
+                    <span className="font-medium">{who}</span> {what} {title}
                   </p>
                   <p className="mt-1 text-(length:--step--2) text-muted">
                     {formatAge(item.created_at)}
@@ -98,7 +97,8 @@ export default async function NotificationsPage() {
                 )}
               </Link>
             </li>
-          ))}
+            );
+          })}
         </ol>
       )}
     </div>

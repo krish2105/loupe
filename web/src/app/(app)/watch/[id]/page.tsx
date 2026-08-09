@@ -9,7 +9,7 @@ import { PlayerProvider } from "@/components/player/PlayerContext";
 import { VideoPlayer } from "@/components/player/VideoPlayer";
 import { VideoActions } from "@/components/actions/VideoActions";
 import { getComments, getRelated, getVideo } from "@/lib/catalogue";
-import { getVideoState } from "@/lib/collections";
+import { getResumePosition, getVideoState } from "@/lib/collections";
 import { getAccessToken, getCurrentUser } from "@/lib/supabase/server";
 import { formatAge, formatViews } from "@/lib/utils";
 
@@ -65,24 +65,45 @@ function ProcessingPlayback() {
   );
 }
 
+/**
+ * `?t=` in seconds — a citation, a playlist item's matched moment, or a URL
+ * someone shared at the interesting part.
+ *
+ * Parsed defensively because it arrives from a URL bar. A negative or
+ * unparseable value becomes "no request" rather than a seek to NaN, which the
+ * media element would accept and then sit at zero duration forever.
+ */
+function parseStartAt(value: string | string[] | undefined): number | undefined {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (!raw) return undefined;
+
+  const seconds = Number(raw);
+  return Number.isFinite(seconds) && seconds > 0 ? Math.floor(seconds) : undefined;
+}
+
 export default async function WatchPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ t?: string }>;
 }) {
-  const { id } = await params;
+  const [{ id }, query] = await Promise.all([params, searchParams]);
 
   const token = await getAccessToken();
 
-  const [video, related, comments, user, state] = await Promise.all([
+  const [video, related, comments, user, state, resume] = await Promise.all([
     getVideo(id),
     getRelated(id, 8),
     getComments(id),
     getCurrentUser(),
     getVideoState(id, token),
+    getResumePosition(id, token),
   ]);
 
   if (!video) notFound();
+
+  const startAtSec = parseStartAt(query.t);
 
   const canPlay = video.capabilities.playable && video.hls_url;
 
@@ -122,6 +143,8 @@ export default async function WatchPage({
               src={video.hls_url!}
               title={video.title}
               videoId={video.id}
+              startAtSec={startAtSec}
+              resumeAtSec={resume?.position_sec ?? undefined}
             />
           ) : video.source_class === "referenced" ? (
             <ReferencedPlayback />

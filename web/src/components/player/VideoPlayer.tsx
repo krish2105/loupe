@@ -23,6 +23,7 @@ export function VideoPlayer({
   title,
   chapters,
   resumeAtSec,
+  startAtSec,
   videoId = null,
 }: {
   src: string;
@@ -31,6 +32,12 @@ export function VideoPlayer({
   chapters?: Chapter[];
   /** A prior position, if one is worth offering. Computed server-side. */
   resumeAtSec?: number;
+  /**
+   * A moment someone asked for — a ?t= deep link from a citation, a playlist
+   * item, or a shared URL. Seeks straight there rather than offering, because
+   * arriving at a link to 14:20 and being asked whether you meant it is absurd.
+   */
+  startAtSec?: number;
   /** Omit for content with no history to keep — the demo route, or a preview. */
   videoId?: string | null;
 }) {
@@ -53,11 +60,19 @@ export function VideoPlayer({
   useProgressReporting(videoId);
 
   const [resumeOffer, setResumeOffer] = useState<number | null>(
-    resumeAtSec && resumeAtSec > 10 ? resumeAtSec : null,
+    // An explicit moment overrides a prior position: you asked for 14:20, so
+    // offering to send you back to where you stopped last time is noise.
+    !startAtSec && resumeAtSec && resumeAtSec > 10 ? resumeAtSec : null,
   );
 
   // Bind the element to the store.
   useEffect(() => attach(videoRef.current), [attach, mounted]);
+
+  // The store holds a seek requested before metadata arrives and applies it
+  // once the duration is known (§5.1), so this needs no readiness check.
+  useEffect(() => {
+    if (startAtSec) seek(startAtSec);
+  }, [startAtSec, seek]);
 
   const toggleFullscreen = useCallback(() => {
     const container = containerRef.current;

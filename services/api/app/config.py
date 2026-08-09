@@ -30,5 +30,10 @@ class Settings(BaseSettings):
     # §4.2: the ingest worker fails closed when the day's quota is gone.
     ingest_daily_quota_units: int = 10_000
 
+    # §5: this service never calls a model. Composing an AI playlist is the AI
+    # service's job; owning and authorising the resulting playlist is this one's.
+    # The URL is how that boundary is crossed.
+    ai_service_url: str = "http://127.0.0.1:8031"
+
 
 settings = Settings()

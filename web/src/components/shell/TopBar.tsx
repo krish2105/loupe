@@ -166,9 +166,11 @@ function Search() {
 export function TopBar({
   onToggleSidebar,
   user,
+  unread = 0,
 }: {
   onToggleSidebar: () => void;
   user: { email: string; initial: string } | null;
+  unread?: number;
 }) {
   return (
     <header
@@ -203,7 +205,11 @@ export function TopBar({
           Create
         </Link>
 
-        <IconButton label="Notifications" href="/notifications">
+        <IconButton
+          label={unread ? `Notifications, ${unread} unread` : "Notifications"}
+          href="/notifications"
+          badge={unread}
+        >
           <Icon name="bell" className="size-6" />
         </IconButton>
 

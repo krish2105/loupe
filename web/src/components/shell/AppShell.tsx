@@ -32,10 +32,12 @@ export function AppShell({
   children,
   user = null,
   channels = [],
+  unread = 0,
 }: {
   children: React.ReactNode;
   user?: ShellUser | null;
   channels?: SidebarChannel[];
+  unread?: number;
 }) {
   const isLarge = useSyncExternalStore(
     subscribeToBreakpoint,
@@ -51,7 +53,7 @@ export function AppShell({
 
   return (
     <div className="min-h-dvh">
-      <TopBar onToggleSidebar={toggle} user={user} />
+      <TopBar onToggleSidebar={toggle} user={user} unread={unread} />
 
       <Sidebar open={open} channels={channels} isSignedIn={Boolean(user)} />
 

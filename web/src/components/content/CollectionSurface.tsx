@@ -63,6 +63,33 @@ function ResumeBar({ context, duration }: { context: CollectionItem["context"]; 
   );
 }
 
+/**
+ * The moment in a talk that answered the brief, on an AI-composed playlist.
+ *
+ * This is the whole argument for building playlists on the transcript layer
+ * rather than on titles: the list can say *where* each talk addresses the
+ * thing you asked about, and send you straight there.
+ */
+function MatchedMoment({ context, videoId }: { context: CollectionItem["context"]; videoId: string }) {
+  if (context?.start_sec === undefined) return null;
+
+  return (
+    <div className="mt-2">
+      <Link
+        href={`/watch/${videoId}?t=${context.start_sec}`}
+        className="font-mono text-(length:--step--2) text-brand hover:underline"
+      >
+        Starts at {formatTimecode(context.start_sec)}
+      </Link>
+      {context.note && (
+        <p className="mt-1 text-pretty text-(length:--step--2) text-muted">
+          &ldquo;{context.note}&rdquo;
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function CollectionSurface({
   title,
   emptyTitle,
@@ -104,6 +131,7 @@ export function CollectionSurface({
             <div key={item.id}>
               <VideoCard video={item} />
               <ResumeBar context={item.context} duration={item.duration_sec} />
+              <MatchedMoment context={item.context} videoId={item.id} />
             </div>
           ))}
         </div>

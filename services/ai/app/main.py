@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from .answering import ExtractiveAnswerer, GeneratedAnswerer
 from .config import settings
 from .embed import build_embedder
+from .playlists import MAX_ITEMS, MIN_ITEMS, VideoCard, compose
 from .retrieval import (
     ModelMismatch,
     RetrievedChunk,
@@ -290,3 +291,73 @@ async def semantic_search(
         )
 
     return {"query": q, "mode": "semantic", "items": items}
+
+
+class PlaylistBrief(BaseModel):
+    brief: str = Field(min_length=8, max_length=300)
+    limit: int = Field(default=8, ge=MIN_ITEMS, le=MAX_ITEMS)
+
+
+@app.post("/v1/playlists/compose")
+async def compose_playlist(payload: PlaylistBrief) -> dict[str, object]:
+    """
+    §11 AI playlists: a brief in, an ordered list plus a written rationale out.
+
+    This proposes; it does not persist. Writing the playlist means knowing who
+    owns it, and §5 puts ownership and authorisation in the core API — which
+    calls this. Keeping the write on the other side of that line is what stops
+    the AI service from needing to verify a session token.
+
+    Retrieval only. No model is called, so this spends nothing against the §10.3
+    ceiling.
+    """
+    connection = pool()
+    embedder = _state["embedder"]
+
+    [query_vector] = embedder.embed([payload.brief])
+
+    # Deliberately over-fetched: the floor and the channel spread both discard
+    # candidates, so retrieving exactly `limit` would guarantee a short list.
+    chunks = await search_across_catalogue(
+        connection, query_vector, embedder.model_id, limit=payload.limit * 5
+    )
+
+    rows = await connection.fetch(
+        """
+        SELECT v.id, v.title, c.id AS channel_id, c.name AS channel_name
+        FROM videos v JOIN channels c ON c.id = v.channel_id
+        WHERE v.id = ANY($1::uuid[])
+        """,
+        [chunk.video_id for chunk in chunks],
+    )
+    cards = {
+        str(row["id"]): VideoCard(
+            video_id=str(row["id"]),
+            title=row["title"],
+            channel_id=str(row["channel_id"]),
+            channel_name=row["channel_name"],
+        )
+        for row in rows
+    }
+
+    proposal = compose(payload.brief, chunks, cards, limit=payload.limit)
+
+    if proposal.refused:
+        return {"refused": True, "reason": proposal.reason, "title": proposal.title}
+
+    return {
+        "refused": False,
+        "title": proposal.title,
+        "rationale": proposal.rationale,
+        "items": [
+            {
+                "video_id": item.video_id,
+                "title": item.title,
+                "channel_name": item.channel_name,
+                "start_sec": item.start_sec,
+                "excerpt": item.excerpt,
+                "score": item.score,
+            }
+            for item in proposal.items
+        ],
+    }
