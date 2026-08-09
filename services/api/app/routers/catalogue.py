@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 from datetime import datetime
 from uuid import UUID
 
@@ -26,6 +27,7 @@ SEARCHABLE_STAGES = ("indexed", "enriched")
 VIDEO_COLUMNS = """
     v.id, v.title, v.description, v.duration_sec, v.published_at,
     v.source_class::text AS source_class,
+    v.content_kind::text AS content_kind,
     v.processing_status::text AS processing_status,
     c.id AS channel_id, c.handle AS channel_handle, c.name AS channel_name,
     c.avatar_url AS channel_avatar,
@@ -51,6 +53,10 @@ def serialise(row) -> dict:
         "duration_sec": row["duration_sec"],
         "published_at": row["published_at"].isoformat() if row["published_at"] else None,
         "source_class": row["source_class"],
+        # ADR 0003. One column rather than a parallel schema, so every surface
+        # that already renders a video renders an episode by branching on this
+        # instead of by reading a different table.
+        "content_kind": row["content_kind"],
         "processing_status": status,
         "channel": {
             "id": str(row["channel_id"]),
@@ -337,3 +343,215 @@ async def channel(handle: str, limit: int = Query(24, ge=1, le=60)) -> dict[str,
         },
         "videos": [serialise(row) for row in rows],
     }
+
+
+# ------------------------------------------------------------- audio mode ---
+# ADR 0003. These endpoints exist because audio needs the playback URL and the
+# transcript up front, not because audio is a different kind of content. The
+# feed, search, channel, and collection endpoints already serve episodes
+# unchanged, which is the point of one content_kind column instead of a second
+# schema.
+
+
+@router.get("/listen")
+async def listen_feed(limit: int = Query(24, ge=1, le=60)) -> dict[str, object]:
+    """
+    Episodes, newest first.
+
+    The playback URL rides along for the same reason it does on /shorts: the
+    queue needs a source the moment someone presses play on a card, and a
+    round-trip per track would make "play all" stutter between every episode.
+    """
+    pool = require_pool()
+
+    rows = await pool.fetch(
+        f"""
+        SELECT {VIDEO_COLUMNS}, a.hls_url
+        {VIDEO_JOINS}
+        LEFT JOIN video_assets a ON a.video_id = v.id
+        WHERE v.content_kind = 'audio' AND v.visibility = 'public'
+        ORDER BY v.published_at DESC NULLS LAST, v.id DESC
+        LIMIT $1
+        """,
+        limit,
+    )
+
+    items = []
+    for row in rows:
+        payload = serialise(row)
+        payload["hls_url"] = row["hls_url"]
+        items.append(payload)
+
+    return {"items": items}
+
+
+@router.get("/videos/{video_id}/transcript")
+async def transcript(video_id: UUID) -> dict[str, object]:
+    """
+    The transcript, as lines short enough to read while listening.
+
+    Built from word timings, not from `transcript_chunks`. The first version did
+    use the chunks, because they were already there and already carried
+    timestamps, and it was wrong in a way that only showed up on screen: chunks
+    are 300 to 600 tokens (§10.2), sized so a retrieval hit has enough context
+    to answer from. On a forty-minute episode that is a three-and-a-half minute
+    wall of text per line. A transcript view whose smallest unit is three
+    minutes is not synced to anything.
+
+    So lines are built by grouping words up to a sentence end or a length cap,
+    and each line's start is the start of its first word. §11.1 calls word-level
+    ASR non-negotiable because citation accuracy depends on it; this is the
+    second thing that depends on it.
+
+    ADR 0003 makes the case that this panel is the argument for spoken audio
+    over CC music. In a music app it is lyrics and needs licensed data. Here it
+    is content Loupe already produced, timed to the word.
+    """
+    pool = require_pool()
+
+    row = await pool.fetchrow(
+        """
+        SELECT t.segments
+        FROM transcripts t
+        JOIN videos v ON v.id = t.video_id
+        WHERE t.video_id = $1 AND v.visibility = 'public'
+        """,
+        video_id,
+    )
+
+    if row is None:
+        return {"available": False, "lines": []}
+
+    segments = row["segments"]
+    if isinstance(segments, str):
+        segments = json.loads(segments)
+
+    return {"available": len(segments) > 0, "lines": build_lines(segments)}
+
+
+#: Roughly one screen line at reading width. A cap rather than a target: lines
+#: end at sentence boundaries wherever there is one, and this only breaks up
+#: speech that runs on without punctuation, which ASR output frequently does.
+LINE_CHAR_CAP = 140
+
+_SENTENCE_END = (".", "!", "?")
+
+
+def build_lines(segments: list[dict]) -> list[dict]:
+    """
+    Group timed words into readable lines.
+
+    Pure and separate from the query so the grouping can be tested without a
+    database, which matters because the off-by-one at a sentence boundary is
+    invisible until someone reads along and the highlight is one line ahead.
+    """
+    lines: list[dict] = []
+    words: list[str] = []
+    start: float | None = None
+    end = 0.0
+    speaker: str | None = None
+
+    def flush() -> None:
+        nonlocal words, start, end, speaker
+        if not words or start is None:
+            return
+        lines.append(
+            {
+                "index": len(lines),
+                "start_sec": round(start, 3),
+                "end_sec": round(end, 3),
+                "speaker": speaker,
+                "text": " ".join(words),
+            }
+        )
+        words = []
+        start = None
+
+    for segment in segments:
+        word = str(segment.get("w", "")).strip()
+        if not word:
+            continue
+
+        # A speaker change always breaks the line. Merging two speakers into one
+        # line makes an interview unreadable.
+        turn = segment.get("spk")
+        if words and turn != speaker:
+            flush()
+
+        if start is None:
+            start = float(segment.get("s", end))
+            speaker = turn
+
+        words.append(word)
+        end = float(segment.get("e", start))
+
+        length = sum(len(part) + 1 for part in words)
+        if word.endswith(_SENTENCE_END) or length >= LINE_CHAR_CAP:
+            flush()
+
+    flush()
+    return lines
+
+
+@router.get("/videos/{video_id}/radio")
+async def radio(video_id: UUID, limit: int = Query(20, ge=1, le=50)) -> dict[str, object]:
+    """
+    A queue built outward from one episode (ADR 0003).
+
+    Reads `video_similarity`, which §6.4 defined in Phase 0 and which nothing
+    used until the Phase 9 recommender populated it. That table is content
+    similarity, so a radio station is neighbours-of-neighbours rather than
+    anything personalised, and it says so rather than implying a model.
+
+    Falls back to the same show when there are no neighbours, which is the case
+    for any episode indexed before the similarity job last ran. An empty radio
+    queue would be a worse answer than an obvious one.
+    """
+    pool = require_pool()
+
+    rows = await pool.fetch(
+        f"""
+        WITH neighbours AS (
+            SELECT s.neighbour_id AS id, s.similarity
+            FROM video_similarity s
+            WHERE s.video_id = $1
+            ORDER BY s.rank
+            LIMIT $2
+        )
+        SELECT {VIDEO_COLUMNS}, a.hls_url, n.similarity
+        {VIDEO_JOINS}
+        JOIN neighbours n ON n.id = v.id
+        LEFT JOIN video_assets a ON a.video_id = v.id
+        WHERE v.visibility = 'public'
+        ORDER BY n.similarity DESC
+        """,
+        video_id,
+        limit,
+    )
+
+    source = "similarity"
+
+    if not rows:
+        source = "same_show"
+        rows = await pool.fetch(
+            f"""
+            SELECT {VIDEO_COLUMNS}, a.hls_url
+            {VIDEO_JOINS}
+            LEFT JOIN video_assets a ON a.video_id = v.id
+            WHERE v.visibility = 'public'
+              AND v.id <> $1
+              AND v.channel_id = (SELECT channel_id FROM videos WHERE id = $1)
+            ORDER BY v.published_at DESC NULLS LAST
+            LIMIT $2
+            """,
+            video_id,
+            limit,
+        )
+
+    items = []
+    for row in rows:
+        payload = serialise(row)
+        payload["hls_url"] = row["hls_url"]
+        items.append(payload)
+
+    return {"source": source, "items": items}

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import { ThemeScript } from "@/components/theme/ThemeScript";
 import "./globals.css";
+import { ServiceWorker } from "@/components/ServiceWorker";
 
 /**
  * Display face. Chosen for its width axis: width is magnification, which is
@@ -38,6 +39,9 @@ export const metadata: Metadata = {
   },
   description:
     "A video platform for AI and machine learning talks. Search inside a talk, ask it questions, and land on the exact moment.",
+  // ADR 0003: installable, so audio mode has somewhere to run that is not a
+  // browser tab. §3.2 rules out a native app, which makes this the ceiling.
+  manifest: "/manifest.webmanifest",
 };
 
 export const viewport: Viewport = {
@@ -60,7 +64,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <ThemeScript />
       </head>
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        {children}
+        <ServiceWorker />
+      </body>
     </html>
   );
 }

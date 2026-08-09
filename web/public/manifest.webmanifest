@@ -1,0 +1,12 @@
+{
+  "name": "Loupe",
+  "short_name": "Loupe",
+  "description": "Search inside talks and podcasts, ask them questions, and land on the exact moment.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0f0f",
+  "theme_color": "#cc0000",
+  "icons": [
+    { "src": "/favicon.ico", "sizes": "48x48", "type": "image/x-icon" }
+  ]
+}

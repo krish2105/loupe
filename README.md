@@ -6,7 +6,9 @@ Search *inside* a talk, ask it questions and get answers that cite the exact
 moment, and land on that moment with one click. Built on an owned catalogue,
 because transcripts are what every interesting feature here depends on.
 
-> **Status: Phase 10 of 11 — feature complete.** Every phase in the plan is
+> **Status: Phase 10 of 11 complete, plus audio mode.** The plan's roadmap ends
+> at Phase 10; [ADR 0003](docs/adr/0003-audio-mode.md) scheduled audio mode
+> after it, and that is now built. Every phase in the plan is
 > built. Five of eleven gates are met outright, five are partial, and one is
 > not met; each is reported individually below with what is missing. Nothing
 > here is rounded up. See [gate status](#gate-status).
@@ -97,6 +99,7 @@ Full reasoning, including what the split costs:
 | Recommendations | Two-stage model, offline eval — **loses to popularity, analysed** |
 | AI playlists | Brief → ordered playlist with a written rationale and per-item start times |
 | Notifications | Trigger fan-out on publish and reply, idempotent, unread badge |
+| Audio mode | Persistent bar, queue, shuffle/repeat, radio, time-synced transcript |
 | Design system | Six tokens, two independently designed themes, visible at `/system` |
 | Player | Adaptive HLS, chapter-segmented scrubber, §9.1 keyboard, resume |
 | Player abstraction | Seek/play/pause/time store, verified against a real stream |
@@ -107,8 +110,8 @@ Full reasoning, including what the split costs:
 | CI | Nine jobs: web, API, AI, eval, recsys, media, ingest, pipeline, schema |
 | Staging deploy | Live at [web-jade-two-b023n56l0y.vercel.app](https://web-jade-two-b023n56l0y.vercel.app) |
 
-Test counts: 44 web, 76 API, 53 AI, 40 eval, 43 recsys, 12 media, 19 ingest,
-49 pipeline, 21 schema assertions. **357 in total**, all green in CI across nine
+Test counts: 76 web, 85 API, 53 AI, 40 eval, 43 recsys, 12 media, 19 ingest,
+49 pipeline, 21 schema assertions. **398 in total**, all green in CI across nine
 jobs.
 
 Seed a browsable catalogue locally with:
@@ -439,26 +442,58 @@ Recorded as they are incurred, per the working agreement.
   keyed to the talk id so each talk always shows the same image, but they have
   nothing to do with its content. Real frames arrive when the media provider
   generates sprite sheets.
+- **Background audio on iOS will not work.** Safari suspends web audio once the
+  browser is backgrounded. Media Session delivers the lock-screen controls and
+  metadata but not the background execution, and §3.2 rules out a native app, so
+  a PWA is the ceiling. Audio does continue during in-app navigation.
+- **The playhead is not restored after a full reload.** The queue survives, the
+  position does not. The append-only watch log already records it and
+  `/videos/{id}/resume` already computes it; wiring that into the bar is small
+  and simply not done.
+- **Media Session, the sleep timer, and the service worker are unverified.**
+  Lock-screen controls and hardware media keys need a phone, offline behaviour
+  needs a production build rather than a dev server, and the shortest sleep
+  timer is fifteen minutes.
 - **Performance targets are unmeasured.** LCP under 2.5s and player
   time-to-first-frame under 1.5s need a deployed API to test against.
 
-## Planned: audio mode
+## Audio mode
 
-After Phase 10, Loupe gains an audio-first mode for spoken audio — podcasts,
-interviews, conference recordings — with the playback controls of a music app:
-persistent queue, shuffle, repeat, radio, background playback with OS media
-controls, offline downloads, and a time-synced transcript view.
+Spoken audio with the controls of a music app: a bar that survives navigation, a
+queue with shuffle and repeat, radio from an episode, playback speed, a sleep
+timer, OS media controls, and a transcript that follows the audio and seeks when
+you click a line.
 
-Spoken audio rather than music, deliberately. Streaming real music needs
-licensing this project does not have, and CC catalogues are overwhelmingly
-instrumental — so the semantic layer, which is the entire differentiator, would
-do nothing. Spoken audio inverts that: every capability already built applies
-unchanged. The time-synced view is a lyrics panel in a music app and needs
-licensed data; here it is the transcript, and the word-level timestamps already
-exist.
+Spoken audio rather than music, deliberately. Real music needs licensing this
+project does not have, and CC catalogues are overwhelmingly instrumental — so
+the semantic layer, the entire differentiator, would do nothing. Spoken audio
+inverts that: every capability already built applies unchanged.
 
-Decision and scope: [ADR 0003](docs/adr/0003-audio-mode.md). Data model, with
-the alternative costed: [audio-data-model.md](docs/design/audio-data-model.md).
+**One column, not a second schema.** `content_kind` on `videos`. Eight of the
+nine surfaces audio mode needs required no schema change, so the comments
+component, the AI panel, and the channel page appear on an episode page
+untouched.
+
+**The week-one abstraction paid for itself here.** §5.1 asked for a
+framework-free player store before anything consumed it. Moving the media
+element out of the video page and into the root layout took one line, and
+nothing that reads playback state changed, because none of it ever knew where
+the element lived.
+
+**Two things were built and then rebuilt.** The queue started as React state,
+which was wrong — a queue restored from storage is external state, and it is now
+a plain store behind `useSyncExternalStore`. And the transcript view used
+retrieval chunks, which put three and a half minutes of speech on one line;
+rebuilt on word timings, the same episode went from 13 walls of text to 340
+readable lines.
+
+**Offline downloads are not built.** ADR 0003 scoped them, and every piece of
+media in the catalogue is a third-party reference stream that Loupe has no right
+to cache. The app is installable and the shell works offline; media caching
+waits for media Loupe owns.
+
+Full account, including what is verified and what needs a phone:
+[`docs/audio-mode.md`](docs/audio-mode.md).
 
 ## Out of scope
 

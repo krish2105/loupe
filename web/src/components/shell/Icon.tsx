@@ -24,7 +24,19 @@ export type IconName =
   | "chevronRight"
   | "shorts"
   | "volume"
-  | "muted";
+  | "muted"
+  | "play"
+  | "pause"
+  | "previous"
+  | "next"
+  | "rewind"
+  | "forward"
+  | "shuffle"
+  | "repeat"
+  | "repeat-one"
+  | "queue"
+  | "download"
+  | "audio";
 
 const PATHS: Record<IconName, React.ReactNode> = {
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
@@ -102,11 +114,91 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="m16 9.5 5 5M21 9.5l-5 5" />
     </>
   ),
+  // Audio mode (ADR 0003). Same 24×24 grid and stroke weight as the rest, so
+  // the transport controls read as part of the set rather than as an import.
+  play: <path d="M8 5.5v13l11-6.5z" />,
+  pause: <path d="M8.5 5.5h3v13h-3zM12.5 5.5h3v13h-3z" />,
+  previous: <path d="M7 5.5v13h1.6v-13zM19 5.5 9.6 12l9.4 6.5z" />,
+  next: <path d="M17 5.5v13h-1.6v-13zM5 5.5 14.4 12 5 18.5z" />,
+  // The numbers are inside the glyph because "back fifteen" and "forward
+  // thirty" are different actions, and two identical arrows facing opposite
+  // ways make people guess.
+  rewind: (
+    <>
+      <path d="M4.5 7.5A8 8 0 1 1 4 12" />
+      <path d="M4.5 4v3.5H8" />
+      <text
+        x="12"
+        y="15.5"
+        textAnchor="middle"
+        fontSize="7"
+        fill="currentColor"
+        stroke="none"
+      >
+        15
+      </text>
+    </>
+  ),
+  forward: (
+    <>
+      <path d="M19.5 7.5A8 8 0 1 0 20 12" />
+      <path d="M19.5 4v3.5H16" />
+      <text
+        x="12"
+        y="15.5"
+        textAnchor="middle"
+        fontSize="7"
+        fill="currentColor"
+        stroke="none"
+      >
+        30
+      </text>
+    </>
+  ),
+  shuffle: (
+    <>
+      <path d="M4 7h3.5l9 10H20M4 17h3.5l9-10H20" />
+      <path d="m17.5 4.5 2.5 2.5-2.5 2.5M17.5 14.5l2.5 2.5-2.5 2.5" />
+    </>
+  ),
+  repeat: (
+    <>
+      <path d="M6 8h12v4M18 16H6v-4" />
+      <path d="m15.5 5.5 2.5 2.5-2.5 2.5M8.5 13.5 6 16l2.5 2.5" />
+    </>
+  ),
+  "repeat-one": (
+    <>
+      <path d="M6 8h12v4M18 16H6v-4" />
+      <path d="m15.5 5.5 2.5 2.5-2.5 2.5M8.5 13.5 6 16l2.5 2.5" />
+      <text
+        x="12"
+        y="14.5"
+        textAnchor="middle"
+        fontSize="7"
+        fill="currentColor"
+        stroke="none"
+      >
+        1
+      </text>
+    </>
+  ),
+  queue: <path d="M4 7h11M4 12h11M4 17h7M17 11v8M17 11l4-1.5v8" />,
+  download: <path d="M12 4v10M8 10.5l4 3.5 4-3.5M5 19h14" />,
+  audio: (
+    <>
+      <path d="M5 10v4M9 7v10M13 5v14M17 8v8M21 11v2" />
+    </>
+  ),
 };
 
 const FILLED: Partial<Record<IconName, boolean>> = {
   home: true,
   liked: true,
+  play: true,
+  pause: true,
+  previous: true,
+  next: true,
 };
 
 export function Icon({

@@ -5,7 +5,6 @@ import { AiPanel } from "@/components/ai/AiPanel";
 import { Comments } from "@/components/content/Comments";
 import { Description } from "@/components/content/Description";
 import { VideoCard } from "@/components/content/VideoCard";
-import { PlayerProvider } from "@/components/player/PlayerContext";
 import { VideoPlayer } from "@/components/player/VideoPlayer";
 import { VideoActions } from "@/components/actions/VideoActions";
 import { getComments, getRelated, getVideo } from "@/lib/catalogue";
@@ -122,7 +121,7 @@ export default async function WatchPage({
   );
 
   return (
-    <PlayerProvider>
+    <>
       {/*
         One DOM instance of everything, repositioned by grid placement.
 
@@ -209,6 +208,6 @@ export default async function WatchPage({
 
         <div className="min-w-0 lg:col-start-2 lg:row-start-2">{relatedRail}</div>
       </div>
-    </PlayerProvider>
+    </>
   );
 }

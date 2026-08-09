@@ -96,6 +96,7 @@
   --topbar-height: 56px;
   --sidebar-width: 240px;
   --rail-width: 72px;
+  --miniplayer-height: 60px;
 }
 
 @layer base {
@@ -173,4 +174,66 @@
 .theme-swapping *::before,
 .theme-swapping *::after {
   transition: none !important;
+}
+
+
+/*
+  The audio scrubber (ADR 0003).
+
+  A styled range input rather than a div with pointer handlers, because the
+  native control already has keyboard support, a focus ring, touch targets that
+  work, and a screen-reader announcement of its value. Reimplementing those on a
+  div is how a scrubber ends up unusable without a mouse.
+
+  The filled portion is painted with a gradient driven by --progress rather than
+  by an overlaid element, so there is nothing to keep in sync with the thumb.
+*/
+.loupe-scrubber {
+  appearance: none;
+  background: linear-gradient(
+    to right,
+    var(--brand) 0%,
+    var(--brand) var(--progress, 0%),
+    var(--rule) var(--progress, 0%),
+    var(--rule) 100%
+  );
+}
+
+.loupe-scrubber::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--brand);
+  /* Hidden until the bar is hovered or focused, so a 1px line stays a 1px line
+     while it is only reporting position. */
+  opacity: 0;
+  transition: opacity 120ms var(--ease-out-quart);
+}
+
+.loupe-scrubber:hover::-webkit-slider-thumb,
+.loupe-scrubber:focus-visible::-webkit-slider-thumb {
+  opacity: 1;
+}
+
+.loupe-scrubber::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: 999px;
+  background: var(--brand);
+}
+
+/*
+  Room for the bar. Applied to the app frame rather than to every page, because
+  a page that forgot it would have its last row of cards permanently covered.
+*/
+.has-miniplayer {
+  padding-bottom: calc(var(--miniplayer-height) + env(safe-area-inset-bottom));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loupe-scrubber::-webkit-slider-thumb {
+    transition: none;
+  }
 }

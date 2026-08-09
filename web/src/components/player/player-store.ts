@@ -76,6 +76,29 @@ export class PlayerStore {
    */
   private pendingSeek: number | null = null;
 
+  /**
+   * Called when a track finishes.
+   *
+   * A separate channel from `subscribe`, because "the media reached its end" is
+   * an event and the snapshot is a state. A queue that inferred the end from
+   * state would have to watch for currentTime approaching duration, which is
+   * unreliable at the boundary and fires nothing at all on a stream whose
+   * duration is not known.
+   *
+   * This exists so the queue can advance without the media element being
+   * public. The element stays private, which is the entire point of §5.1's
+   * abstraction: the queue was not designed until eleven phases after the store
+   * was, and it still does not get to touch the DOM.
+   */
+  private endedListeners = new Set<() => void>();
+
+  onEnded = (listener: () => void): (() => void) => {
+    this.endedListeners.add(listener);
+    return () => {
+      this.endedListeners.delete(listener);
+    };
+  };
+
   getSnapshot = (): PlayerSnapshot => this.snapshot;
 
   /** Server render has no media element, so it sees the empty snapshot. */
@@ -97,11 +120,17 @@ export class PlayerStore {
     const onEvent = () => this.sync();
     for (const event of MEDIA_EVENTS) media.addEventListener(event, onEvent);
 
+    const onEnded = () => {
+      for (const listener of this.endedListeners) listener();
+    };
+    media.addEventListener("ended", onEnded);
+
     this.sync();
     this.flushPendingSeek();
 
     return () => {
       for (const event of MEDIA_EVENTS) media.removeEventListener(event, onEvent);
+      media.removeEventListener("ended", onEnded);
       if (this.media === media) {
         this.media = null;
         this.publish(EMPTY);
