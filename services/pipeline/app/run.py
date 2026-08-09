@@ -117,6 +117,36 @@ async def run_once(pool) -> dict:
         rows = await eligible(pool, step, settings.batch_size)
         outcomes: dict[str, int] = {}
 
+        if name == "transcribe" and transcriber.needs_audio_file:
+            # A real recogniser needs audio, and the only assets we can supply
+            # audio for are the ones whose source is in our own bucket. A
+            # referenced stream has no source file to extract from, so handing
+            # one to the transcriber fails and the stage machine records the
+            # video as broken — which it is not. It is not ours to transcribe.
+            #
+            # Declining is not silent: the count is reported, because a
+            # catalogue where most talks are quietly skipped is something the
+            # operator should see rather than infer.
+            playable = await pool.fetch(
+                """
+                SELECT v.id FROM videos v
+                JOIN video_assets a ON a.video_id = v.id
+                WHERE v.id = ANY($1::uuid[]) AND a.provider = 's3'
+                """,
+                [row["id"] for row in rows],
+            )
+            ours = {row["id"] for row in playable}
+            declined = len(rows) - len(ours)
+            if declined:
+                report["transcribe_declined_no_audio"] = declined
+                logger.info(
+                    "%d video(s) skipped: %s needs an audio file and their media "
+                    "is not hosted here",
+                    declined,
+                    transcriber.engine,
+                )
+            rows = [row for row in rows if row["id"] in ours]
+
         for row in rows:
             video_id = row["id"]
 

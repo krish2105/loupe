@@ -31,6 +31,17 @@ class Transcriber(Protocol):
     engine: str
     engine_version: str
 
+    #: Whether `audio_ref` must be a readable audio file on disk.
+    #:
+    #: Real recognisers need audio; the fixture generates from a string and will
+    #: accept anything. The distinction matters because the catalogue holds
+    #: assets whose media we do not host — a referenced stream has no source
+    #: file in our bucket to extract audio from — and a real transcriber handed
+    #: one of those fails, which the stage machine correctly records as the
+    #: video being broken. It is not broken. It is simply not ours to
+    #: transcribe, and the pipeline should decline it rather than park it.
+    needs_audio_file: bool
+
     def transcribe(self, audio_ref: str, duration_sec: int) -> list[Word]: ...
 
 
@@ -83,6 +94,8 @@ _SECTIONS: list[tuple[str, list[str]]] = [
 
 
 class FixtureTranscriber:
+    needs_audio_file = False
+
     """Deterministic word-level transcript. Never presented as real speech."""
 
     engine = "fixture"
@@ -157,6 +170,7 @@ class GroqTranscriber:
 
     engine = "groq-whisper"
     engine_version = "whisper-large-v3-turbo"
+    needs_audio_file = True
 
     #: The free tier's ceiling. Larger files need splitting, which is real work
     #: and not needed until a talk runs past roughly three hours at 16 kHz mono.
@@ -238,6 +252,7 @@ class WhisperXTranscriber:  # pragma: no cover - requires the model
     """
 
     engine = "whisperx"
+    needs_audio_file = True
 
     def __init__(self, model_size: str = "base", device: str = "cpu") -> None:
         try:

@@ -77,6 +77,34 @@ async def sign(client: httpx.AsyncClient, key: str) -> str:
     return response.json()["url"]
 
 
+async def already_uploaded(client: httpx.AsyncClient, pool, slug: str) -> bool:
+    """Whether this talk's source object is already in the bucket."""
+    async with pool.acquire() as connection:
+        guid = await connection.fetchval(
+            """
+            SELECT a.provider_guid FROM video_assets a
+            JOIN videos v ON v.id = a.video_id
+            WHERE v.external_id = $1
+            """,
+            f"corpus:{slug}",
+        )
+
+    if not guid:
+        return False
+
+    response = await client.post(
+        f"{MEDIA_URL}/v1/internal/sign",
+        headers={"Authorization": f"Bearer {INTERNAL_TOKEN}"},
+        json={"key": f"videos/{guid}/source/original", "method": "GET",
+              "expires_in": 300},
+    )
+    if response.status_code != 200:
+        return False
+
+    head = await client.head(response.json()["url"])
+    return head.status_code == 200
+
+
 async def main() -> int:
     if not INTERNAL_TOKEN:
         print("INTERNAL_TOKEN is not set; the media service will not sign uploads.")
@@ -101,6 +129,13 @@ async def main() -> int:
 
         async with httpx.AsyncClient(timeout=httpx.Timeout(30, write=300)) as client:
             for talk in TALKS:
+                # Skip anything already uploaded, so a run that failed part
+                # way through resumes instead of redoing minutes of speech
+                # synthesis for talks that are already in the bucket.
+                if await already_uploaded(client, pool, talk.slug):
+                    print(f"  {talk.slug}: already uploaded, skipping")
+                    continue
+
                 print(f"  {talk.slug}: rendering…", flush=True)
                 mp4 = render(talk, workspace)
 
@@ -134,12 +169,29 @@ async def main() -> int:
                         "DELETE FROM transcripts WHERE video_id = $1", video_id
                     )
 
-                url = await sign(client, f"videos/{video_id}/source/original")
-                response = await client.put(
-                    url, content=mp4.read_bytes(),
-                    headers={"Content-Type": "video/mp4"},
-                )
-                response.raise_for_status()
+                # Retried, because this is several megabytes over whatever
+                # connection the machine happens to have and a dropped socket
+                # here is ordinary rather than exceptional. Observed: seven of
+                # eight uploads succeeded and the largest failed with a read
+                # error, leaving a row with no media behind it.
+                payload = mp4.read_bytes()
+                for attempt in range(3):
+                    try:
+                        url = await sign(client, f"videos/{video_id}/source/original")
+                        response = await client.put(
+                            url, content=payload,
+                            headers={"Content-Type": "video/mp4"},
+                        )
+                        response.raise_for_status()
+                        break
+                    except (httpx.HTTPError, httpx.StreamError) as error:
+                        if attempt == 2:
+                            raise
+                        # A fresh signature each time: the retry may land after
+                        # the previous one expired.
+                        print(f"  {talk.slug}: upload attempt {attempt + 1} failed "
+                              f"({type(error).__name__}), retrying")
+                        await asyncio.sleep(2 * (attempt + 1))
 
                 size = mp4.stat().st_size / 1_048_576
                 print(f"  {talk.slug}: uploaded {size:.1f} MB as {video_id}")
