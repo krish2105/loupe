@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Web
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          # @supabase/supabase-js drops Node 20; the local machine still runs
+          # it, so CI holds the line at the version we will have to move to.
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+  api:
+    name: API
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups
+      - run: uv run ruff check .
+      - run: uv run pytest -q
+
+  schema:
+    name: Schema
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # pgvector's own image, so the extension version matches local.
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: loupe_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/loupe_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply migrations
+        run: ./db/migrate.sh
+      - name: Migrations are idempotent
+        # Re-running must be a no-op. §5.1 makes idempotency an architectural
+        # rule; a migration runner that breaks on second run contradicts it.
+        run: ./db/migrate.sh
+      - name: Constraint tests
+        # Fails the build if any PASS line is missing or any FAIL appears.
+        run: |
+          output=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 --quiet --no-psqlrc \
+            -f db/tests/constraints.sql 2>&1)
+          echo "$output"
+          echo "$output" | grep -q "FAIL" && exit 1
+          count=$(echo "$output" | grep -c "PASS")
+          echo "$count constraint assertions passed"
+          [ "$count" -ge 16 ] || { echo "expected at least 16 assertions"; exit 1; }

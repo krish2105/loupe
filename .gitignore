@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.*
+.venv/
+__pycache__/
+*.py[cod]
+
+# Builds
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# Test and tooling output
+coverage/
+.pytest_cache/
+.ruff_cache/
+.vitest/
+
+# Secrets — this repository is public. Nothing with a real value goes in.
+# §14: nothing in the repository, ever.
+.env
+.env.*
+!.env.example
+
+# Local media and pipeline artifacts. Transcription output is large and
+# reproducible; §10.3 exports it as a portable artifact loaded into the
+# database, not committed.
+/media/
+/artifacts/
+*.mp4
+*.m3u8
+*.ts
+*.wav
+
+# OS and editor
+.DS_Store
+*.pem
+.vercel
+.idea/
+.vscode/

@@ -1,0 +1,25 @@
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """
+    Configuration, read from the environment.
+
+    §14: nothing in the repository, ever. Every value here comes from a platform
+    secret manager in staging and production, and from an untracked .env locally.
+    """
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    database_url: str = "postgres://localhost:5432/loupe_dev"
+    environment: str = "local"
+
+    # §10.3: the transcription cost ceiling is enforced by code, not discipline.
+    # The worker reads this before starting a job and refuses when it is spent.
+    transcription_minutes_cap: int = 3000
+
+    # §4.2: the ingest worker fails closed when the day's quota is gone.
+    ingest_daily_quota_units: int = 10_000
+
+
+settings = Settings()

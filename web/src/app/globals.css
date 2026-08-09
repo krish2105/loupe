@@ -1,0 +1,164 @@
+@import "tailwindcss";
+
+/* ===========================================================================
+   Loupe — design tokens
+   Referent: a dimmed auditorium (dark) and a lit surface (light).
+
+   The system rule, which matters more than any single value:
+   CHROME IS ACHROMATIC. Colour means "the machine found this."
+   Buttons, links, nav, focus rings are built from screen/dust/rule only.
+   `citrine` appears on the semantic layer and nowhere else — transcript
+   matches, citation marks, chapter boundaries, the AI-ready state.
+   A reader learns the mapping in seconds and never unlearns it.
+   Plan ref: §7.2 (exactly one accent, boldness spent in one place).
+   =========================================================================== */
+
+/* Dark is the primary theme (§7.2) but light is designed independently, not
+   inverted: dark's referent is a warm room, light's is a cool lit surface.
+   They are deliberately opposite in temperature. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+
+  --hall: #f6f7f9;   /* canvas */
+  --riser: #ffffff;  /* elevated: cards, sheets, player chrome */
+  --rule: #e3e5ea;   /* borders, dividers, scrubber track */
+  --dust: #5e636b;   /* secondary text, metadata, timecodes */
+  --screen: #14161a; /* primary text */
+
+  /* In light the Mark is a GROUND — a highlighter wash behind near-black text.
+     Same gesture as dark's stroke, different physics. */
+  --citrine: #6e5f12;
+  --citrine-ground: #f4ea6b;
+  --citrine-faint: #faf4c4;
+
+  /* Deliberately dull, so it never competes with citrine for attention.
+     Errors are not the loudest thing on the page. */
+  --danger: #9b3b2f;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --hall: #14110e;   /* warm brown-black — the dimmed auditorium, not blue-black */
+  --riser: #1e1a17;
+  --rule: #2e2823;
+  --dust: #9a9187;
+  --screen: #f4f0e9; /* the projection screen: warm off-white, never pure white */
+
+  /* In dark the Mark is a STROKE. */
+  --citrine: #e2d45e;
+  --citrine-ground: rgb(226 212 94 / 0.16);
+  --citrine-faint: rgb(226 212 94 / 0.08);
+
+  --danger: #c8756b;
+}
+
+@theme inline {
+  --color-hall: var(--hall);
+  --color-riser: var(--riser);
+  --color-rule: var(--rule);
+  --color-dust: var(--dust);
+  --color-screen: var(--screen);
+  --color-citrine: var(--citrine);
+  --color-citrine-ground: var(--citrine-ground);
+  --color-citrine-faint: var(--citrine-faint);
+  --color-danger: var(--danger);
+
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, monospace;
+
+  /* Radius is a four-step scale, not one value applied everywhere.
+     0 for the scrubber (a timeline has square ends), 4 for marks and chips,
+     10 for cards and sheets, pill for the search capsule. */
+  --radius-none: 0px;
+  --radius-sm: 4px;
+  --radius-md: 10px;
+  --radius-pill: 999px;
+}
+
+/* Fluid type (§7.2): clamp() across all breakpoints, no jumps at a media query.
+   Ratio opens from 1.20 at 360px to 1.25 at 1440px. */
+:root {
+  --step--2: clamp(0.69rem, 0.67rem + 0.11vw, 0.75rem); /* timecodes, micro-labels */
+  --step--1: clamp(0.81rem, 0.78rem + 0.16vw, 0.89rem); /* captions, metadata */
+  --step-0: clamp(0.94rem, 0.9rem + 0.21vw, 1.05rem); /* body */
+  --step-1: clamp(1.13rem, 1.06rem + 0.31vw, 1.31rem);
+  --step-2: clamp(1.35rem, 1.24rem + 0.47vw, 1.64rem);
+  --step-3: clamp(1.62rem, 1.45rem + 0.71vw, 2.05rem);
+  --step-4: clamp(1.94rem, 1.69rem + 1.05vw, 2.57rem);
+  --step-5: clamp(2.33rem, 1.97rem + 1.53vw, 3.21rem);
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+
+  --rail-width: 56px;
+}
+
+@layer base {
+  html {
+    /* Transitioning colour on the root would repaint the whole tree on every
+       theme change. The toggle disables transitions during the swap instead
+       (see ThemeScript), so this stays cheap. */
+    background-color: var(--hall);
+    color: var(--screen);
+  }
+
+  body {
+    background-color: var(--hall);
+    color: var(--screen);
+    font-family: var(--font-sans);
+    font-size: var(--step-0);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Display face used with restraint (§7.1): headings only, never below 20px.
+     `wdth` is the reason this face was chosen — width is magnification, which
+     is what the product's name means. */
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-variation-settings: "wdth" 100;
+    line-height: 1.1;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+
+  /* Achromatic focus ring: visible, and it never borrows the accent, because
+     the accent means something else. */
+  :focus-visible {
+    outline: 2px solid var(--screen);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  ::selection {
+    background: var(--citrine-ground);
+    color: var(--screen);
+  }
+}
+
+/* The single most important accessibility line in the file (§7.3, §7.7):
+   every motion is gated, and content stays fully usable without it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Suppresses the colour transition flash while the theme attribute swaps. */
+.theme-swapping *,
+.theme-swapping *::before,
+.theme-swapping *::after {
+  transition: none !important;
+}
