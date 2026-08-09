@@ -13,6 +13,101 @@ Supabase, Render, Vercel (already connected), and optionally Bunny.
 
 ---
 
+## Finding the credentials
+
+Two values do most of the work. Neither should ever be pasted into a chat, a
+commit, or an issue — put them straight into the platform's secret store.
+
+### DATABASE_URL
+
+From Supabase, after creating the project in step 1.
+
+1. Open the project and click **Connect** at the top of the dashboard. (Older
+   dashboards put this under **Project Settings → Database → Connection
+   string**. Supabase moves it; the value is the same.)
+2. Choose **Transaction pooler** — the URI on port **6543**, host
+   `aws-0-<region>.pooler.supabase.com`.
+3. Copy the URI. It looks like:
+
+   ```
+   postgresql://postgres.abcdefghijklm:[YOUR-PASSWORD]@aws-0-eu-central-1.pooler.supabase.com:6543/postgres
+   ```
+
+4. Replace `[YOUR-PASSWORD]` with the database password you set when creating
+   the project. Forgotten it? **Project Settings → Database → Database password
+   → Reset**. Resetting invalidates the old one everywhere, so update every
+   place that holds it.
+5. If the password contains `@ : / ? # [ ] %`, percent-encode it, or the URL
+   parses wrongly and you get an authentication error that blames the username.
+
+Test it before pasting it anywhere:
+
+```bash
+psql "postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres" -c "SELECT 1"
+```
+
+**Which pooler.** Transaction (6543) is right for both the Render web services
+and the GitHub Actions jobs: it survives cold starts and short-lived connections,
+which is what both are. Session pooler (5432) holds a real backend connection per
+client and the free tier has few of them.
+
+Every service in this repository opens its pool with `statement_cache_size=0`,
+which the transaction pooler requires. PgBouncer in transaction mode hands a
+connection to a different client between statements, and asyncpg's cached
+prepared statements then collide with `prepared statement
+"__asyncpg_stmt_1__" already exists` — an error that reads like a bug in this
+code and is not. It is set unconditionally, because it is harmless on a direct
+connection and a setting that only applies to one URL is a setting nobody
+remembers.
+
+**Where it goes:**
+
+| | |
+|---|---|
+| Render | Prompted by the Blueprint, once per service |
+| GitHub Actions | **Settings → Secrets and variables → Actions → New repository secret**, named `DATABASE_URL` |
+| Locally | Not needed. `./dev.sh` uses your local Postgres |
+
+Never in Vercel. The browser has no business holding a database URL, and
+`NEXT_PUBLIC_` anything is shipped to it.
+
+### YOUTUBE_API_KEY
+
+Entirely optional. Without it the ingest worker runs against a deterministic
+fixture provider, which is what the current 3,048-video catalogue came from. The
+worker, the quota ledger, the idempotency and the write path are identical
+either way; only the upstream differs.
+
+1. Go to <https://console.cloud.google.com> and create a project, or pick one.
+2. **APIs & Services → Library**, search **YouTube Data API v3**, press
+   **Enable**.
+3. **APIs & Services → Credentials → Create credentials → API key**. Copy it.
+4. Press **Edit API key** and restrict it. An unrestricted key is a key anyone
+   who finds it can spend:
+   - **API restrictions → Restrict key → YouTube Data API v3**
+   - Leave application restrictions as **None**. Referrer and IP restrictions
+     are for browsers and fixed addresses; this key is used by a GitHub runner
+     whose IP changes every run.
+5. The default quota is 10,000 units a day. §4.2 caps this project at 2,000, so
+   a runaway loop hits our ceiling before Google's.
+
+**Where it goes:** the same GitHub Actions secrets page, named
+`YOUTUBE_API_KEY`. Not Render — the ingest worker moved to Actions.
+
+### The rest, briefly
+
+| Secret | Where to find it |
+|---|---|
+| `SUPABASE_JWT_SECRET` | Supabase → **Project Settings → API → JWT Settings → JWT Secret** |
+| `NEXT_PUBLIC_SUPABASE_URL` | Same page, **Project URL** |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Same page, **anon public**. Safe in the browser; the `service_role` key next to it is not, and is never used by this project |
+| `CORS_ORIGINS` | Your Vercel URL, exact, with scheme and no trailing slash |
+| `GEMINI_API_KEY` | <https://aistudio.google.com/apikey>. Optional |
+| `BUNNY_*` | Bunny dashboard → Stream → your library → **API** |
+| `WEBHOOK_SECRET` | You generate it: `openssl rand -hex 32` |
+
+---
+
 ## 1. Database and auth — Supabase
 
 One account covers both, which is the reason §14 chose it: the app needs

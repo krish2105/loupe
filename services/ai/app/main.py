@@ -39,7 +39,9 @@ _state: dict = {}
 async def lifespan(app: FastAPI):
     dsn = settings.database_url.replace("postgres://", "postgresql://", 1)
     try:
-        _state["pool"] = await asyncpg.create_pool(dsn, min_size=1, max_size=8)
+        _state["pool"] = await asyncpg.create_pool(
+            dsn, min_size=1, max_size=8, statement_cache_size=0
+        )
     except (OSError, asyncpg.PostgresError):
         _state["pool"] = None
 

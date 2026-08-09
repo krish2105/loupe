@@ -71,7 +71,7 @@ async def lifespan(app: FastAPI):
     _refuse_outside_development()
 
     dsn = settings.database_url.replace("postgres://", "postgresql://", 1)
-    pool = await asyncpg.create_pool(dsn, min_size=1, max_size=4)
+    pool = await asyncpg.create_pool(dsn, min_size=1, max_size=4, statement_cache_size=0)
 
     # Created here rather than in db/migrations, because the migration chain is
     # what runs against production and this table must never reach it.

@@ -168,7 +168,7 @@ async def main() -> int:
         "DATABASE_URL", "postgres://localhost:5432/loupe_dev"
     ).replace("postgres://", "postgresql://", 1)
 
-    pool = await asyncpg.create_pool(dsn, min_size=1, max_size=4)
+    pool = await asyncpg.create_pool(dsn, min_size=1, max_size=4, statement_cache_size=0)
     now = datetime.now(UTC)
 
     try:

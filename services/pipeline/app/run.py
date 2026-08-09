@@ -98,7 +98,7 @@ async def run_once(pool) -> dict:
 
 async def main() -> int:
     dsn = settings.database_url.replace("postgres://", "postgresql://", 1)
-    pool = await asyncpg.create_pool(dsn, min_size=1, max_size=4)
+    pool = await asyncpg.create_pool(dsn, min_size=1, max_size=4, statement_cache_size=0)
     try:
         # Several passes, because one pass advances a video exactly one stage.
         combined = []

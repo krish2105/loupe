@@ -15,4 +15,4 @@ async def connect() -> asyncpg.Pool:
     nothing is not.
     """
     dsn = settings.database_url.replace("postgres://", "postgresql://", 1)
-    return await asyncpg.create_pool(dsn, min_size=1, max_size=4)
+    return await asyncpg.create_pool(dsn, min_size=1, max_size=4, statement_cache_size=0)

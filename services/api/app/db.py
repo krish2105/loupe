@@ -22,7 +22,23 @@ async def connect() -> asyncpg.Pool | None:
     try:
         # asyncpg wants postgresql://, and Supabase hands out postgres://.
         dsn = settings.database_url.replace("postgres://", "postgresql://", 1)
-        _pool = await asyncpg.create_pool(dsn, min_size=1, max_size=10)
+        _pool = await asyncpg.create_pool(
+            dsn,
+            min_size=1,
+            max_size=10,
+            # statement_cache_size=0 is required, not tuning.
+            #
+            # Supabase's transaction pooler is PgBouncer in transaction mode,
+            # where a connection is handed to a different client between
+            # statements. asyncpg prepares statements by name and caches them,
+            # so the second query on a recycled connection fails with
+            # "prepared statement __asyncpg_stmt_1__ already exists" — a real
+            # error that reads like a bug in this code and is not.
+            #
+            # Harmless on a direct connection, so it is set unconditionally
+            # rather than branching on which URL happened to be configured.
+            statement_cache_size=0,
+        )
     except (OSError, asyncpg.PostgresError):
         _pool = None
 

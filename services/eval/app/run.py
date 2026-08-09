@@ -34,7 +34,9 @@ async def main() -> int:
     ).replace("postgres://", "postgresql://", 1)
     ai_url = os.environ.get("AI_URL", "http://localhost:8031")
 
-    pool = await asyncpg.create_pool(database_url, min_size=1, max_size=2)
+    pool = await asyncpg.create_pool(
+        database_url, min_size=1, max_size=2, statement_cache_size=0
+    )
     try:
         corpus = await corpus_in_database(pool)
         try:
