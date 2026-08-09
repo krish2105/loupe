@@ -5,6 +5,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { Avatar } from "@/components/shell/Avatar";
 import { MarkNode } from "@/components/mark/Mark";
 import { Thumbnail } from "./Thumbnail";
+import { badgeFor } from "./capability-badge";
 import type { VideoSummary } from "@/lib/catalogue";
 import { cn, formatAge, formatTimecode, formatViews } from "@/lib/utils";
 
@@ -32,7 +33,9 @@ type Density = "grid" | "row" | "compact";
  * announcing an absence would make the common case look broken.
  */
 function CapabilityBadge({ video }: { video: VideoSummary }) {
-  if (video.capabilities.askable) {
+  const kind = badgeFor(video.capabilities);
+
+  if (kind === "searchable") {
     return (
       <span className="mt-1 inline-flex items-center gap-1.5 text-(length:--step--2) text-muted">
         <MarkNode />
@@ -41,15 +44,17 @@ function CapabilityBadge({ video }: { video: VideoSummary }) {
     );
   }
 
-  if (video.capabilities.processing) {
-    return (
-      <span className="mt-1 block text-(length:--step--2) text-muted">
-        Indexing — watchable now
-      </span>
-    );
-  }
+  if (kind === "none") return null;
 
-  return null;
+  // "Still processing" is the watch page's own wording, kept identical here so
+  // the card and the page it leads to do not describe one state two ways.
+  return (
+    <span className="mt-1 block text-(length:--step--2) text-muted">
+      {kind === "indexing"
+        ? "Indexing — watchable now"
+        : "Still processing — not yet watchable"}
+    </span>
+  );
 }
 
 export function VideoCard({
