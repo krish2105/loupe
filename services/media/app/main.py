@@ -5,10 +5,10 @@ import time
 from contextlib import asynccontextmanager
 from uuid import UUID
 
-from fastapi import FastAPI, HTTPException, Path
+from fastapi import FastAPI, HTTPException, Path, Response
 from pydantic import BaseModel
 
-from . import bunny, db
+from . import bunny, db, playlist, storage
 from .config import settings
 
 """
@@ -46,13 +46,23 @@ class UploadTicket(BaseModel):
     The file never passes through our infrastructure. That is not an
     optimisation — proxying video through a small instance would make uploads
     the single most expensive thing the platform does.
+
+    Shaped by the two providers it has to serve. S3 needs a URL and a method
+    and nothing else, because the signature travels in the query string; Bunny
+    needs a library, a video id and a separate signature header. Rather than
+    invent a lowest common denominator that fits neither, the fields either
+    provider does not use are simply absent, and `method` tells the client which
+    shape it received.
     """
 
-    library_id: str
-    video_guid: str
     upload_url: str
-    signature: str
     expires_at: int
+    method: str = "POST"
+
+    # Bunny only.
+    library_id: str | None = None
+    video_guid: str | None = None
+    signature: str | None = None
 
 
 @app.get("/health")
@@ -81,15 +91,46 @@ async def create_upload(request: UploadRequest) -> UploadTicket:
     if not settings.is_configured:
         raise HTTPException(
             status_code=503,
-            detail="Media provider is not configured. Set BUNNY_LIBRARY_ID and BUNNY_API_KEY.",
+            detail=(
+                "Media provider is not configured. Set S3_ENDPOINT, S3_REGION, "
+                "S3_BUCKET, S3_KEY_ID and S3_APPLICATION_KEY."
+            ),
         )
 
     pool = db.pool()
     if pool is None:
         raise HTTPException(status_code=503, detail="Database unavailable.")
 
-    created = await bunny.BunnyClient().create_video(request.title)
     expires_at = int(time.time()) + 3600
+
+    if settings.provider == "s3":
+        video_id = str(request.video_id)
+
+        # The row is written before the bytes arrive, exactly as on the Bunny
+        # path: whatever reports the transcode finishing needs a row to update,
+        # and it may well get there first.
+        async with pool.acquire() as connection:
+            await connection.execute(
+                """
+                INSERT INTO video_assets (video_id, provider, provider_guid)
+                VALUES ($1, 's3', $2)
+                ON CONFLICT (video_id) DO UPDATE SET provider_guid = EXCLUDED.provider_guid
+                """,
+                request.video_id,
+                video_id,
+            )
+            await connection.execute(
+                "UPDATE videos SET processing_status = 'uploaded' WHERE id = $1",
+                request.video_id,
+            )
+
+        return UploadTicket(
+            upload_url=storage.upload_url(video_id, "original", ttl=3600),
+            expires_at=expires_at,
+            method="PUT",
+        )
+
+    created = await bunny.BunnyClient().create_video(request.title)
 
     # The asset row is written before the bytes arrive, so a webhook that beats
     # the client's completion callback still finds a row to update.
@@ -147,6 +188,16 @@ async def playback_url(video_id: UUID) -> dict[str, object]:
 
     expires_at = int(time.time()) + settings.playback_token_ttl_sec
 
+    if settings.provider == "s3":
+        # Not a presigned bucket URL. The master playlist is served by this
+        # service so that the URIs inside it are resolved at fetch time — see
+        # storage.playlist_url for why signing them any earlier breaks playback
+        # for anyone who does not start watching immediately.
+        return {
+            "hls_url": storage.playlist_url(row["provider_guid"], "master.m3u8"),
+            "expires_at": expires_at,
+        }
+
     return {
         "hls_url": bunny.signed_playback_url(
             settings.bunny_pull_zone,
@@ -156,6 +207,41 @@ async def playback_url(video_id: UUID) -> dict[str, object]:
         ),
         "expires_at": expires_at,
     }
+
+
+@app.get("/v1/hls/{video_id}/{path:path}")
+async def hls_playlist(video_id: str, path: str) -> Response:
+    """
+    Serve one playlist out of the private bucket, with its URIs rewritten.
+
+    The only thing this service proxies. A playlist is a few kilobytes; the
+    segments it names are fetched straight from the bucket with presigned URLs,
+    so the video itself never crosses this process.
+    """
+    if settings.provider != "s3":
+        raise HTTPException(status_code=404, detail="Not found.")
+
+    if not playlist.is_safe_path(path):
+        raise HTTPException(status_code=400, detail="Invalid path.")
+
+    if not playlist.is_playlist(path):
+        raise HTTPException(
+            status_code=400,
+            detail="Only playlists are served here; segments come from the bucket directly.",
+        )
+
+    body = await storage.fetch_playlist(video_id, path)
+    if body is None:
+        raise HTTPException(status_code=404, detail="No such playlist.")
+
+    return Response(
+        content=body,
+        media_type="application/vnd.apple.mpegurl",
+        # The URIs inside carry signatures with their own expiry, so a cached
+        # copy would hand out URLs that have already died. Regenerating costs
+        # one small bucket read.
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 class BunnyWebhook(BaseModel):
