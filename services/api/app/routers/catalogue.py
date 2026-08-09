@@ -8,6 +8,8 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query
 
 from .. import db
+from ..config import settings
+from ..playback import playable_url
 
 """
 Catalogue reads: the feed, a video, a channel.
@@ -193,7 +195,7 @@ async def shorts(limit: int = Query(12, ge=1, le=30)) -> dict[str, object]:
     items = []
     for row in rows:
         payload = serialise(row)
-        payload["hls_url"] = row["hls_url"]
+        payload["hls_url"] = playable_url(row["hls_url"], settings.media_service_url)
         items.append(payload)
 
     return {"items": items}
@@ -269,9 +271,14 @@ async def video_detail(video_id: UUID) -> dict[str, object]:
         raise HTTPException(status_code=404, detail="No such talk.")
 
     payload = serialise(row)
-    # A real deployment signs this through the media service (§5.1). The seed
-    # stores a public reference stream, which is why it is passed through here.
-    payload["hls_url"] = row["hls_url"] if payload["capabilities"]["playable"] else None
+    # The column holds an absolute URL for the seeded reference stream and a
+    # bucket key for anything our transcoder produced; only the second needs
+    # the media service to become openable (§5.1).
+    payload["hls_url"] = (
+        playable_url(row["hls_url"], settings.media_service_url)
+        if payload["capabilities"]["playable"]
+        else None
+    )
     return payload
 
 
@@ -379,7 +386,7 @@ async def listen_feed(limit: int = Query(24, ge=1, le=60)) -> dict[str, object]:
     items = []
     for row in rows:
         payload = serialise(row)
-        payload["hls_url"] = row["hls_url"]
+        payload["hls_url"] = playable_url(row["hls_url"], settings.media_service_url)
         items.append(payload)
 
     return {"items": items}
@@ -551,7 +558,7 @@ async def radio(video_id: UUID, limit: int = Query(20, ge=1, le=50)) -> dict[str
     items = []
     for row in rows:
         payload = serialise(row)
-        payload["hls_url"] = row["hls_url"]
+        payload["hls_url"] = playable_url(row["hls_url"], settings.media_service_url)
         items.append(payload)
 
     return {"source": source, "items": items}

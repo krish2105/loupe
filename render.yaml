@@ -73,6 +73,13 @@ services:
       # connection per cold start and Supabase's direct limit is small.
       - key: DATABASE_URL
         sync: false
+      # Where the media service lives. The catalogue stores a bucket key for
+      # anything our own transcoder produced, and this is what turns a key into
+      # a URL a player can open. Without it those videos return no hls_url at
+      # all, which is better than returning a relative path that 404s on the
+      # web app's own origin.
+      - key: MEDIA_SERVICE_URL
+        sync: false
       # Supabase → JWT Keys → Legacy JWT Secret. Only used by projects still
       # signing symmetrically; a project with JWT signing keys verifies against
       # SUPABASE_URL's JWKS instead and can leave this empty.

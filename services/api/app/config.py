@@ -16,6 +16,11 @@ class Settings(BaseSettings):
 
     #: Browsers refuse cross-origin requests without this, and the web app is
     #: always a different origin from the services. Comma-separated.
+    #: Where the media service lives. The catalogue stores a bucket key for
+    #: anything our own transcoder produced, and only this service knows the
+    #: address that turns a key into something a player can open.
+    media_service_url: str = "http://localhost:8002"
+
     cors_origins: str = "http://localhost:3000"
 
     # Supabase signs access tokens with this on projects still using the legacy
