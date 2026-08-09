@@ -96,7 +96,11 @@ async def health() -> dict[str, object]:
         "status": "ok",
         "environment": settings.environment,
         "database": database,
+        "provider": settings.provider,
         "provider_configured": settings.is_configured,
+        # Names of unset S3 variables, so a misconfigured deploy says which one
+        # rather than only that something is wrong. Never values.
+        "s3_missing": settings.s3_missing,
     }
 
 

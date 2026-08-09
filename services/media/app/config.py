@@ -70,14 +70,33 @@ class Settings(BaseSettings):
     webhook_secret: str = ""
 
     @property
+    def s3_missing(self) -> list[str]:
+        """
+        Which S3 variables are unset.
+
+        Reported by /health because "provider_configured: false" is true and
+        useless — it is the same unhelpful shape as a page saying it could not
+        reach a service that was running and answering. Five variables are
+        required and any one of them missing looks identical from outside, so
+        the name of the missing one is the entire diagnosis.
+
+        Names only. A value is never returned; two of these are secrets.
+        """
+        return [
+            name
+            for name, value in (
+                ("S3_ENDPOINT", self.s3_endpoint),
+                ("S3_REGION", self.s3_region),
+                ("S3_BUCKET", self.s3_bucket),
+                ("S3_KEY_ID", self.s3_key_id),
+                ("S3_APPLICATION_KEY", self.s3_application_key),
+            )
+            if not value
+        ]
+
+    @property
     def s3_configured(self) -> bool:
-        return bool(
-            self.s3_endpoint
-            and self.s3_region
-            and self.s3_bucket
-            and self.s3_key_id
-            and self.s3_application_key
-        )
+        return not self.s3_missing
 
     @property
     def bunny_configured(self) -> bool:
