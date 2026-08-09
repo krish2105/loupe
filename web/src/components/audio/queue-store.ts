@@ -44,6 +44,16 @@ export type QueueSnapshot = {
   upcoming: QueueTrack[];
 };
 
+/**
+ * Saved playhead per episode.
+ *
+ * Deliberately outside the snapshot. Positions are written every ten seconds
+ * and read once per track change, which is the exact opposite access pattern to
+ * the queue itself — putting them in the snapshot would re-render the bar and
+ * the queue panel six times a minute to store a number nothing is displaying.
+ */
+type Positions = Record<string, number>;
+
 const STORAGE_KEY = "loupe.queue.v1";
 
 /** Cycles in the order the button implies: none, then all, then just this one. */
@@ -59,6 +69,7 @@ const EMPTY_SNAPSHOT: QueueSnapshot = {
 export class QueueStore {
   private listeners = new Set<() => void>();
   private snapshot: QueueSnapshot = EMPTY_SNAPSHOT;
+  private positions: Positions = {};
   private loaded = false;
 
   getSnapshot = (): QueueSnapshot => {
@@ -90,7 +101,10 @@ export class QueueStore {
       const saved = JSON.parse(raw) as {
         state?: QueueState;
         tracks?: Record<string, QueueTrack>;
+        positions?: Positions;
       };
+      this.positions = saved.positions ?? {};
+
       if (!saved.state?.items?.length) return;
 
       this.snapshot = derive(saved.state, saved.tracks ?? {});
@@ -103,7 +117,11 @@ export class QueueStore {
     try {
       window.localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ state: this.snapshot.state, tracks: this.snapshot.tracks }),
+        JSON.stringify({
+          state: this.snapshot.state,
+          tracks: this.snapshot.tracks,
+          positions: this.positions,
+        }),
       );
     } catch {
       // Private browsing and full quotas both throw here. Losing the queue on
@@ -181,7 +199,39 @@ export class QueueStore {
   };
 
   clear = (): void => {
+    // Positions survive clearing the queue. Someone emptying a queue is saying
+    // "not these, next" — not "forget where I was in the episode I was
+    // halfway through".
     this.commit(EMPTY_QUEUE, {});
+  };
+
+  /** Where this episode was left, if anywhere. */
+  positionFor = (videoId: string): number | null => {
+    this.getSnapshot(); // Forces the lazy restore on a first read.
+    return this.positions[videoId] ?? null;
+  };
+
+  /**
+   * Record the playhead.
+   *
+   * Persists without notifying. Nothing renders this, and waking every
+   * subscriber to write a number to storage would make the bar and the queue
+   * panel re-render on a timer.
+   *
+   * Callers throttle. ProgressReporter already decides when a position is worth
+   * writing, and this reuses that judgement rather than inventing a second one.
+   */
+  rememberPosition = (videoId: string, seconds: number): void => {
+    this.getSnapshot();
+    this.positions[videoId] = Math.floor(seconds);
+    this.persist();
+  };
+
+  /** Called when an episode finishes, so it does not resume onto its own end. */
+  forgetPosition = (videoId: string): void => {
+    this.getSnapshot();
+    delete this.positions[videoId];
+    this.persist();
   };
 }
 

@@ -110,8 +110,8 @@ Full reasoning, including what the split costs:
 | CI | Nine jobs: web, API, AI, eval, recsys, media, ingest, pipeline, schema |
 | Staging deploy | Live at [web-jade-two-b023n56l0y.vercel.app](https://web-jade-two-b023n56l0y.vercel.app) |
 
-Test counts: 76 web, 85 API, 53 AI, 40 eval, 43 recsys, 12 media, 19 ingest,
-49 pipeline, 21 schema assertions. **398 in total**, all green in CI across nine
+Test counts: 83 web, 85 API, 53 AI, 40 eval, 43 recsys, 12 media, 19 ingest,
+49 pipeline, 21 schema assertions. **405 in total**, all green in CI across nine
 jobs.
 
 Seed a browsable catalogue locally with:
@@ -446,10 +446,6 @@ Recorded as they are incurred, per the working agreement.
   browser is backgrounded. Media Session delivers the lock-screen controls and
   metadata but not the background execution, and §3.2 rules out a native app, so
   a PWA is the ceiling. Audio does continue during in-app navigation.
-- **The playhead is not restored after a full reload.** The queue survives, the
-  position does not. The append-only watch log already records it and
-  `/videos/{id}/resume` already computes it; wiring that into the bar is small
-  and simply not done.
 - **Media Session, the sleep timer, and the service worker are unverified.**
   Lock-screen controls and hardware media keys need a phone, offline behaviour
   needs a production build rather than a dev server, and the shortest sleep
@@ -486,6 +482,11 @@ a plain store behind `useSyncExternalStore`. And the transcript view used
 retrieval chunks, which put three and a half minutes of speech on one line;
 rebuilt on word timings, the same episode went from 13 walls of text to 340
 readable lines.
+
+**The playhead survives a reload.** Saved per episode, restored on load, and
+declined when the episode was effectively finished — the same two §9.1
+thresholds the API applies, so the two paths cannot resume the same episode to
+different places.
 
 **Offline downloads are not built.** ADR 0003 scoped them, and every piece of
 media in the catalogue is a third-party reference stream that Loupe has no right

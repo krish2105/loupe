@@ -6,9 +6,10 @@ import { Icon } from "@/components/shell/Icon";
 import { useHls } from "@/components/player/useHls";
 import { usePlayerControls, usePlayerState } from "@/components/player/PlayerContext";
 import { useProgressReporting } from "@/components/player/useProgressReporting";
-import { useQueueControls, useQueueState } from "./QueueContext";
+import { useQueueControls, useQueueState, useQueueStore } from "./QueueContext";
 import { QueuePanel } from "./QueuePanel";
 import { useMediaSession } from "./useMediaSession";
+import { usePlayhead } from "./usePlayhead";
 import { cn, formatTimecode } from "@/lib/utils";
 
 /**
@@ -33,6 +34,7 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 export function MiniPlayer() {
   const { current, state, upcoming } = useQueueState();
   const { next, previous, toggleShuffle, cycleRepeat } = useQueueControls();
+  const queueStore = useQueueStore();
 
   const mediaRef = useRef<HTMLVideoElement | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -51,6 +53,7 @@ export function MiniPlayer() {
 
   useHls(mediaRef, current?.src ?? "", mounted && Boolean(current));
   useProgressReporting(current?.id ?? null);
+  usePlayhead(queueStore, current?.id ?? null);
   useMediaSession();
 
   useEffect(() => attach(mediaRef.current), [attach, mounted, current?.id]);

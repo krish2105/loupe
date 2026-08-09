@@ -51,6 +51,15 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
   return <QueueContext value={store}>{children}</QueueContext>;
 }
 
+/**
+ * The raw store, for callers that need positions rather than the queue —
+ * playhead persistence being the case this exists for. Those reads and writes
+ * happen on a timer and must not wake every subscriber.
+ */
+export function useQueueStore(): QueueStore {
+  return useStore();
+}
+
 function useStore(): QueueStore {
   const store = useContext(QueueContext);
   if (!store) {

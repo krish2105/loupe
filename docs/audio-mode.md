@@ -125,10 +125,44 @@ browser is backgrounded, Media Session delivers the controls and metadata but
 not the background execution, and §3.2 rules out a native app. Audio does
 continue during in-app navigation, which is what was verified.
 
-**Position is not restored after a full page reload.** The queue survives, the
-playhead does not. The append-only watch log already records position for
-signed-in listeners and `GET /videos/{id}/resume` already computes it — wiring
-that into the bar is small and is simply not done.
+## The playhead
+
+Positions are saved per episode and restored on reload, so returning to a
+forty-minute episode does not mean scrubbing for the place you had reached.
+Per episode rather than one global playhead, which also makes switching to
+something else and coming back work.
+
+It reuses two things rather than inventing them. `ProgressReporter` already
+decides when a position is worth writing — every ten seconds, immediately after
+a seek, never the same second twice — and that judgement is the same one whether
+the destination is the API or `localStorage`. And the §9.1 thresholds are the
+same: under ten seconds is not worth resuming to, and past 95% lands on the
+sign-off.
+
+Those thresholds now exist in two places, in the API and in
+`resume-policy.ts`, and that duplication is deliberate. The API's copy answers
+"where is this signed-in person, on any device" and needs a round trip. This one
+answers "where was this tab", has to be instant, and has to work for someone who
+never signed in. They must agree, because the same episode resuming to two
+different places depending on which path restored it is worse than either rule
+alone.
+
+Three decisions worth stating:
+
+- Restoring does not start playback. Browsers block autoplay without a gesture
+  anyway, but the position is the useful part and resuming into sound nobody
+  asked for is not.
+- The restore waits for metadata, because the "effectively finished" test needs
+  a duration to compare against. The player store holds a seek requested before
+  metadata (§5.1), so waiting costs nothing and makes the decision correct.
+- Positions survive clearing the queue. Emptying a queue means "not these,
+  next", not "forget where I was in the episode I was halfway through".
+
+Finishing an episode forgets its position, so replaying it does not start on the
+credits.
+
+Verified in a browser, both ways: an episode left at 248 seconds of 600 came
+back at 248; the same episode left at 592 of 600 came back at zero.
 
 ## Verified, and not
 
@@ -143,6 +177,7 @@ that into the bar is small and is simply not done.
 | Hardware media keys | **Not verified** |
 | Service worker offline behaviour | **Not verified** — needs a build, not a dev server |
 | Sleep timer firing | **Not verified** — the shortest option is 15 minutes |
+| Playhead restored after reload | **Verified in a browser**, mid-episode and near the end |
 
 The pattern from every previous phase holds: what could be made pure was made
 pure and tested, and what needs a device says so.
