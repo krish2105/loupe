@@ -86,6 +86,24 @@ FAILED
 fi
 echo "     ok"
 
+# A hosted Supabase project always has an auth schema. A plain Postgres does
+# not, and this script would then apply eleven of twelve steps before failing on
+# the auth link with "schema auth does not exist" — a confusing way to learn you
+# ran the wrong script.
+if ! psql_quiet --tuples-only --no-align \
+     -c "SELECT 1 FROM information_schema.schemata WHERE schema_name = 'auth'" 2>/dev/null | grep -q 1; then
+  cat >&2 <<'NOTHOSTED'
+     this database has no `auth` schema, so it is not a Supabase project.
+
+     For a local database use:
+       DATABASE_URL=postgres://localhost:5432/loupe_dev ./db/migrate.sh
+
+     For a Supabase project, check the connection string points at the project
+     you think it does.
+NOTHOSTED
+  exit 1
+fi
+
 echo "2/4  extensions"
 # Both of the ones migration 0001 needs. Checked together rather than letting
 # the second one fail at step 3, after the first has already succeeded — a
