@@ -211,6 +211,43 @@ credits.
 Verified in a browser, both ways: an episode left at 248 seconds of 600 came
 back at 248; the same episode left at 592 of 600 came back at zero.
 
+## The sleep timer
+
+Shows a running countdown in the player bar, in seconds, with one press to
+cancel.
+
+The rule underneath it: **remaining time is computed from a deadline, never
+decremented.** Those look equivalent and are not. A sleep timer spends almost
+its whole life in a backgrounded tab, where browsers throttle timers to roughly
+one call a minute, and every skipped tick is a minute a decrementing counter
+never subtracts. A fifteen-minute timer would still read eleven after twenty.
+Recomputing from a deadline is correct however few times it runs.
+
+Three smaller decisions:
+
+- Seconds are always displayed. A counter reading "14 min" for a full minute
+  before jumping to "13 min" gives no sign it is running, which is the one thing
+  a countdown is for.
+- Ticks are aligned to the next whole second rather than fired every 1000ms. A
+  flat interval drifts a few milliseconds per tick and eventually skips a
+  number, which reads as a stutter.
+- The timer also checks when the tab becomes visible again, because a throttled
+  tab can pass its deadline long before the next tick. The audio has stopped by
+  the time anyone looks, rather than playing on until a late timer notices.
+
+It is its own component so a per-second tick re-renders eleven characters
+instead of the transport controls. The bar already re-renders on every
+`timeupdate`, so the saving is small — but the play button has no business
+re-rendering because a clock moved.
+
+Pausing rather than stopping means the position survives and the playhead
+persistence picks it up.
+
+Verified in a browser: the countdown read 15:00 and then 14:57 three seconds
+later, and pushing the clock twenty minutes past a fifteen-minute deadline and
+firing a visibility change paused the audio and cleared the timer — which is the
+backgrounded-tab case the deadline design exists for.
+
 ## Verified, and not
 
 | | |
@@ -225,7 +262,7 @@ back at 248; the same episode left at 592 of 600 came back at zero.
 | Downloading an episode | **Verified in a browser** — 12MB audio rendition, three cache entries |
 | Offline serving and range slicing | **Verified in a browser** against an unreachable host |
 | Playing a downloaded episode with the network truly down | **Not verified** — needs a real offline device |
-| Sleep timer firing | **Not verified** — the shortest option is 15 minutes |
+| Sleep timer countdown and firing | **Verified in a browser**, including the backgrounded-tab path |
 | Playhead restored after reload | **Verified in a browser**, mid-episode and near the end |
 
 The pattern from every previous phase holds: what could be made pure was made

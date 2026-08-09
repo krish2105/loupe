@@ -110,8 +110,8 @@ Full reasoning, including what the split costs:
 | CI | Nine jobs: web, API, AI, eval, recsys, media, ingest, pipeline, schema |
 | Staging deploy | Live at [web-jade-two-b023n56l0y.vercel.app](https://web-jade-two-b023n56l0y.vercel.app) |
 
-Test counts: 98 web, 96 API, 53 AI, 40 eval, 43 recsys, 12 media, 19 ingest,
-49 pipeline, 21 schema assertions. **431 in total**, all green in CI across nine
+Test counts: 110 web, 96 API, 53 AI, 40 eval, 43 recsys, 12 media, 19 ingest,
+49 pipeline, 21 schema assertions. **443 in total**, all green in CI across nine
 jobs.
 
 Seed a browsable catalogue locally with:
@@ -446,9 +446,13 @@ Recorded as they are incurred, per the working agreement.
   browser is backgrounded. Media Session delivers the lock-screen controls and
   metadata but not the background execution, and §3.2 rules out a native app, so
   a PWA is the ceiling. Audio does continue during in-app navigation.
-- **Media Session and the sleep timer are unverified.** Lock-screen controls and
-  hardware media keys need a phone, and the shortest sleep timer is fifteen
-  minutes.
+- **Media Session is unverified.** Lock-screen controls and hardware media keys
+  need a phone.
+- **Every fixture episode shares one media URL.** Downloads are cached by media
+  URL, so downloading one demo episode makes all six report as downloaded. That
+  is accurate — the same bytes really would play for any of them — and it
+  disappears the moment episodes have distinct URLs, which they do anywhere but
+  the fixture.
 - **Playing a downloaded episode with the network genuinely down is
   unverified.** The download, the cache contents, and the service worker's
   offline serving and range slicing are each verified in a browser — the last
@@ -486,6 +490,10 @@ a plain store behind `useSyncExternalStore`. And the transcript view used
 retrieval chunks, which put three and a half minutes of speech on one line;
 rebuilt on word timings, the same episode went from 13 walls of text to 340
 readable lines.
+
+**The sleep timer counts down in seconds** and is computed from a deadline
+rather than decremented, so a backgrounded tab that only gets one timer callback
+a minute still stops the audio on time.
 
 **The playhead survives a reload.** Saved per episode, restored on load, and
 declined when the episode was effectively finished — the same two §9.1

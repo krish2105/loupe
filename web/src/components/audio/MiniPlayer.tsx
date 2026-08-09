@@ -8,6 +8,7 @@ import { usePlayerControls, usePlayerState } from "@/components/player/PlayerCon
 import { useProgressReporting } from "@/components/player/useProgressReporting";
 import { useQueueControls, useQueueState, useQueueStore } from "./QueueContext";
 import { QueuePanel } from "./QueuePanel";
+import { SleepTimer } from "./SleepTimer";
 import { useMediaSession } from "./useMediaSession";
 import { usePlayhead } from "./usePlayhead";
 import { cn, formatTimecode } from "@/lib/utils";
@@ -40,8 +41,6 @@ export function MiniPlayer() {
   const [mounted, setMounted] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   const [speed, setSpeed] = useState(1);
-  /** Minutes left on the sleep timer, or null when it is off. */
-  const [sleepMinutes, setSleepMinutes] = useState<number | null>(null);
 
   const setMedia = useCallback((element: HTMLVideoElement | null) => {
     mediaRef.current = element;
@@ -79,31 +78,6 @@ export function MiniPlayer() {
     if (mediaRef.current) mediaRef.current.playbackRate = speed;
   }, [speed, current?.id]);
 
-  /**
-   * Sleep timer.
-   *
-   * Counted down in state rather than derived from a deadline, because reading
-   * a clock during render is impure and the React compiler is right to reject
-   * it. A tick a minute is cheap and the displayed number is then always the
-   * one that was rendered.
-   *
-   * Pauses rather than stops, so the position survives. Someone who fell asleep
-   * wants to pick the episode back up, not restart it.
-   */
-  useEffect(() => {
-    if (sleepMinutes === null) return;
-
-    const tick = window.setTimeout(() => {
-      if (sleepMinutes <= 1) {
-        mediaRef.current?.pause();
-        setSleepMinutes(null);
-      } else {
-        setSleepMinutes(sleepMinutes - 1);
-      }
-    }, 60_000);
-
-    return () => window.clearTimeout(tick);
-  }, [sleepMinutes]);
 
   if (!current) return null;
 
@@ -236,28 +210,9 @@ export function MiniPlayer() {
                 </option>
               ))}
             </select>
-
-            <label className="sr-only" htmlFor="mini-sleep">
-              Sleep timer
-            </label>
-            <select
-              id="mini-sleep"
-              value={sleepMinutes === null ? "" : "set"}
-              onChange={(event) => {
-                const minutes = Number(event.target.value);
-                setSleepMinutes(minutes > 0 ? minutes : null);
-              }}
-              className="rounded-(--radius-sm) border border-rule bg-canvas px-2 py-1 text-(length:--step--2)"
-            >
-              <option value="">
-                {sleepMinutes === null ? "Sleep" : `${sleepMinutes} min`}
-              </option>
-              <option value="15">15 min</option>
-              <option value="30">30 min</option>
-              <option value="60">60 min</option>
-              <option value="0">Off</option>
-            </select>
           </div>
+
+          <SleepTimer />
 
           <IconButton
             label={`Queue, ${upcoming.length} up next`}
