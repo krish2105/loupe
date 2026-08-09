@@ -69,6 +69,26 @@ export function useHls(
     const video = videoRef.current;
     if (!video || !src || !mounted) return;
 
+    /**
+     * A stream that never loads has to become an error eventually.
+     *
+     * Without this, a manifest that simply never arrives leaves the player
+     * black at 0:00 / 0:00 with the play button showing and no message,
+     * indefinitely — which is precisely what a stalled fetch, a blocked host,
+     * or a network that silently drops the connection looks like. hls.js
+     * reports fatal errors it detects, and reports nothing at all when the
+     * request neither succeeds nor fails.
+     *
+     * Twenty seconds is long enough that a slow connection still loads and
+     * short enough that nobody sits looking at a black rectangle wondering
+     * whether it is their fault.
+     */
+    const stall = setTimeout(() => {
+      setOutcome((current) =>
+        current?.src === src ? current : { src, status: "error" },
+      );
+    }, 20_000);
+
     // Native HLS — Safari and iOS. Assigning src is the whole integration.
     if (video.canPlayType("application/vnd.apple.mpegurl")) {
       const onReady = () => setOutcome({ src, status: "ready" });
@@ -79,6 +99,7 @@ export function useHls(
       video.src = src;
 
       return () => {
+        clearTimeout(stall);
         video.removeEventListener("loadedmetadata", onReady);
         video.removeEventListener("error", onError);
         video.removeAttribute("src");
@@ -135,6 +156,7 @@ export function useHls(
     });
 
     return () => {
+      clearTimeout(stall);
       cancelled = true;
       instance?.destroy();
       hlsRef.current = null;

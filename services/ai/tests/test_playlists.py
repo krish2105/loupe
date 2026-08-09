@@ -224,3 +224,26 @@ class TestTitle:
 
         assert proposal.refused
         assert proposal.title == "Obscure brief"
+
+
+class TestWhyItRefused:
+    """
+    Two different failures used to share one sentence, and the difference is
+    the whole diagnosis. Found in production, where every compose refused with
+    "not enough talks address this closely enough" while the real cause was
+    that nothing had ever been indexed — sending someone to rewrite a brief
+    that was never the problem.
+    """
+
+    def test_says_so_when_nothing_is_indexed(self):
+        proposal = compose("anything at all", [], {})
+
+        assert proposal.refused
+        assert "indexed" in proposal.reason
+
+    def test_says_something_different_when_matches_were_simply_weak(self):
+        proposal = compose("anything at all", [chunk("v1", 0.01)], {})
+
+        assert proposal.refused
+        assert "indexed" not in proposal.reason
+        assert "closely enough" in proposal.reason

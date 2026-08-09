@@ -105,14 +105,25 @@ def compose(
     ]
 
     if len(eligible) < MIN_ITEMS:
+        # Two different failures wore the same sentence, and the difference is
+        # the whole diagnosis. Retrieval returning nothing at all means the
+        # catalogue has no indexed talks — the pipeline has not run — and
+        # telling someone their brief was too specific sends them to rewrite a
+        # question that was never the problem. Verified in production, where
+        # every compose refused with the wrong reason while the real cause was
+        # an empty index.
         return PlaylistProposal(
             title=_title_for(brief),
             items=(),
             rationale="",
             refused=True,
             reason=(
-                "Not enough talks in the catalogue address this closely enough "
-                "to make a playlist worth watching."
+                "No talks have been indexed yet, so there is nothing to search "
+                "inside. Playlists become available once transcription and "
+                "indexing have run."
+                if not chunks
+                else "Not enough talks in the catalogue address this closely "
+                "enough to make a playlist worth watching."
             ),
         )
 
