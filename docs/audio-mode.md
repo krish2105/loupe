@@ -105,19 +105,66 @@ It falls back to the same show when an episode has no neighbours — which is th
 case for anything indexed since the similarity job last ran, including every
 episode here.
 
-## What was not built, and why
+## Offline downloads
 
-**Offline media downloads.** ADR 0003 scoped them and they are not here. Every
-piece of media in the catalogue is a third-party reference stream, and the ADR
-is explicit that offline downloads only work for content Loupe owns or that is
-openly licensed, calling that a licensing fact rather than a technical gap.
-Caching those segments anyway so the feature demos well is exactly what that
-sentence rules out.
+Built, after being declined once. The reasoning for declining conflated two
+things: ADR 0003's rule is about the *class of content*, and the schema can
+enforce exactly that. Class A is what Loupe owns; Class B is referenced and
+never stored. So downloads are constrained to Class A by a trigger in migration
+0012 rather than being refused wholesale in a comment. The demo catalogue's
+media being a developer test stream is a fixture limitation, recorded with the
+others, not a reason to leave a capability unbuilt.
 
-What did ship: the app is installable, and a service worker keeps the shell
-available offline with a page that says what is and is not possible. The
-`downloads` table was written into the migration and then removed before
-committing — a table nothing writes to is a claim that something does.
+**What gets stored is audio only.** On the reference stream the audio rendition
+is 12MB against 27MB for the smallest video one, and this is audio mode.
+Downloading video for a podcast is storing something nobody is going to look at.
+
+Three cache entries per episode: a rewritten master playlist offering only the
+audio rendition, the audio rendition's own playlist unchanged, and the file its
+byte ranges are cut from.
+
+**The rewritten master is the part that makes it work.** Serving the original
+master offline would let the player pick a video rendition that was never
+stored, and that failure reads as a broken download rather than a missing one.
+So the stored master offers exactly one variant.
+
+Which is also why the service worker is network-first for media, not
+cache-first. The rewritten master served while online would silently cap every
+stream at audio quality on a page showing a video player. Online gets the real
+manifest; only a failed fetch falls back.
+
+**Byte ranges are sliced on read.** This stream, like every fragmented-MP4 HLS
+stream, addresses one file by range rather than shipping separate segments.
+Cache Storage matches on URL alone, so a ranged request would otherwise get the
+whole 12MB file back with a 200, which hls.js cannot use. The worker reads the
+stored entry, cuts the range out, and returns a 206 with the right
+`Content-Range`. That costs a read per segment instead of holding a hundred
+near-duplicate cache entries — about one 12MB read per six seconds of playback,
+which is nothing, and the alternative risks a key that never matches.
+
+The download runs in the page, not the worker. Cache Storage is available in
+both, and doing it in the page makes progress a callback, cancel an
+`AbortController`, and failure a rejected promise on the button that started it.
+The worker's only job is serving what the page put there.
+
+**Verified against an unreachable host**, which is the only way to make the
+network branch actually fail on demand:
+
+```
+full request        200, 1000 bytes from cache
+bytes=10-19         206, Content-Range: bytes 10-19/1000, first byte 10, last 19
+bytes=-4            206, 4 bytes, correct suffix
+```
+
+The stored master came back as the one-variant rewrite and the audio file at
+12,132,238 bytes, matching the CDN's `Content-Length`.
+
+One thing not fully explained: the first download attempt failed with a generic
+error while an older service worker was still being replaced, and has not
+reproduced since. The new worker's activate handler preserves the media cache
+where the old one swept every cache but the shell, which is the most likely
+cause and is the behaviour that was wanted anyway. Recorded rather than
+presented as diagnosed.
 
 **Sustained background audio on iOS.** ADR 0003 predicted this and it is worth
 repeating rather than burying: Safari suspends web audio aggressively once the
@@ -175,7 +222,9 @@ back at 248; the same episode left at 592 of 600 came back at zero.
 | Active-line selection | 6 unit tests |
 | Media Session on a lock screen | **Not verified** — needs a phone |
 | Hardware media keys | **Not verified** |
-| Service worker offline behaviour | **Not verified** — needs a build, not a dev server |
+| Downloading an episode | **Verified in a browser** — 12MB audio rendition, three cache entries |
+| Offline serving and range slicing | **Verified in a browser** against an unreachable host |
+| Playing a downloaded episode with the network truly down | **Not verified** — needs a real offline device |
 | Sleep timer firing | **Not verified** — the shortest option is 15 minutes |
 | Playhead restored after reload | **Verified in a browser**, mid-episode and near the end |
 

@@ -98,6 +98,24 @@ COLLECTIONS: dict[str, Collection] = {
             WHERE si.user_id = $1 AND si.list_type = 'liked'
         """,
     ),
+    "downloads": Collection(
+        key="downloads",
+        title="Downloads",
+        empty_title="Nothing downloaded yet",
+        empty_body=(
+            "Download an episode and it plays without a connection. "
+            "Only talks Loupe hosts can be downloaded."
+        ),
+        # A fifth surface, and it cost a dictionary entry. §6.2 predicted that
+        # in Phase 0 and this is the first time it was tested by something the
+        # abstraction was not designed against.
+        membership_sql="""
+            SELECT d.video_id, d.requested_at AS sort_key,
+                   jsonb_build_object('bytes', d.bytes) AS context
+            FROM downloads d
+            WHERE d.user_id = $1
+        """,
+    ),
     "subscriptions": Collection(
         key="subscriptions",
         title="Subscriptions",
@@ -216,6 +234,7 @@ async def list_collections(
           (SELECT count(*) FROM saved_items
            WHERE user_id = $1 AND list_type = 'liked') AS liked,
           (SELECT count(*) FROM subscriptions WHERE user_id = $1) AS subscriptions,
+          (SELECT count(*) FROM downloads WHERE user_id = $1) AS downloads,
           (SELECT count(*) FROM playlists WHERE owner_id = $1) AS playlists
         """,
         user_id,
@@ -226,6 +245,7 @@ async def list_collections(
             {"key": spec.key, "title": spec.title, "count": counts[spec.key]}
             for spec in COLLECTIONS.values()
         ],
+        "download_count": counts["downloads"],
         "playlist_count": counts["playlists"],
     }
 
@@ -464,6 +484,71 @@ async def video_state(
         "liked": row["liked"],
         "subscribed": row["subscribed"],
     }
+
+
+# ---------------------------------------------------------------- downloads ---
+# ADR 0003. The bytes live in the browser's Cache Storage; these rows are the
+# record of what was asked for and how big it turned out.
+
+
+class DownloadRecord(BaseModel):
+    #: Written when the transfer finishes. Absent means it was started and never
+    #: completed, which is what lets the UI offer a retry rather than showing a
+    #: download that does not work.
+    bytes: int | None = Field(default=None, ge=0)
+
+
+@router.put("/downloads/{video_id}", status_code=204)
+async def record_download(
+    video_id: UUID,
+    payload: DownloadRecord,
+    user_id: UUID = Depends(require_user_id),
+) -> None:
+    """
+    Record a download, or complete one.
+
+    Called twice per download: once when it starts, with no size, and once when
+    it finishes, with the size. Upsert rather than two endpoints, because "start"
+    and "finish" are the same fact at different stages of completeness.
+    """
+    pool = require_pool()
+
+    try:
+        await pool.execute(
+            """
+            INSERT INTO downloads (user_id, video_id, bytes)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (user_id, video_id) DO UPDATE
+            SET bytes = COALESCE(EXCLUDED.bytes, downloads.bytes)
+            """,
+            user_id,
+            video_id,
+            payload.bytes,
+        )
+    except Exception as error:
+        message = str(error).lower()
+        # The database refuses Class B downloads (migration 0012). Translated
+        # here rather than pre-checked, so there is one rule and not two.
+        if "referenced content cannot be downloaded" in message:
+            raise HTTPException(
+                status_code=409,
+                detail="This talk is hosted elsewhere, so it cannot be downloaded.",
+            ) from error
+        if "foreign key" in message:
+            raise HTTPException(status_code=404, detail="No such talk.") from error
+        raise
+
+
+@router.delete("/downloads/{video_id}", status_code=204)
+async def remove_download(
+    video_id: UUID, user_id: UUID = Depends(require_user_id)
+) -> None:
+    pool = require_pool()
+    await pool.execute(
+        "DELETE FROM downloads WHERE user_id = $1 AND video_id = $2",
+        user_id,
+        video_id,
+    )
 
 
 # ---------------------------------------------------------------- playlists ---

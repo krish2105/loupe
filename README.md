@@ -110,8 +110,8 @@ Full reasoning, including what the split costs:
 | CI | Nine jobs: web, API, AI, eval, recsys, media, ingest, pipeline, schema |
 | Staging deploy | Live at [web-jade-two-b023n56l0y.vercel.app](https://web-jade-two-b023n56l0y.vercel.app) |
 
-Test counts: 83 web, 85 API, 53 AI, 40 eval, 43 recsys, 12 media, 19 ingest,
-49 pipeline, 21 schema assertions. **405 in total**, all green in CI across nine
+Test counts: 98 web, 96 API, 53 AI, 40 eval, 43 recsys, 12 media, 19 ingest,
+49 pipeline, 21 schema assertions. **431 in total**, all green in CI across nine
 jobs.
 
 Seed a browsable catalogue locally with:
@@ -446,10 +446,14 @@ Recorded as they are incurred, per the working agreement.
   browser is backgrounded. Media Session delivers the lock-screen controls and
   metadata but not the background execution, and §3.2 rules out a native app, so
   a PWA is the ceiling. Audio does continue during in-app navigation.
-- **Media Session, the sleep timer, and the service worker are unverified.**
-  Lock-screen controls and hardware media keys need a phone, offline behaviour
-  needs a production build rather than a dev server, and the shortest sleep
-  timer is fifteen minutes.
+- **Media Session and the sleep timer are unverified.** Lock-screen controls and
+  hardware media keys need a phone, and the shortest sleep timer is fifteen
+  minutes.
+- **Playing a downloaded episode with the network genuinely down is
+  unverified.** The download, the cache contents, and the service worker's
+  offline serving and range slicing are each verified in a browser — the last
+  two against an unreachable host, which is the only way to make the network
+  branch fail on demand. Putting a real device in aeroplane mode is not.
 - **Performance targets are unmeasured.** LCP under 2.5s and player
   time-to-first-frame under 1.5s need a deployed API to test against.
 
@@ -488,10 +492,13 @@ declined when the episode was effectively finished — the same two §9.1
 thresholds the API applies, so the two paths cannot resume the same episode to
 different places.
 
-**Offline downloads are not built.** ADR 0003 scoped them, and every piece of
-media in the catalogue is a third-party reference stream that Loupe has no right
-to cache. The app is installable and the shell works offline; media caching
-waits for media Loupe owns.
+**Offline downloads store audio only.** 12MB per episode against 27MB for the
+smallest video rendition, which is the right trade for a podcast. A rewritten
+master playlist offers just the audio track, so an offline player cannot pick a
+rendition that was never stored, and the service worker slices HLS byte ranges
+out of the cached file and returns them as proper 206s. Downloads are limited to
+Class A by a database trigger, because ADR 0003's rule is about what Loupe owns
+and the schema can enforce exactly that.
 
 Full account, including what is verified and what needs a phone:
 [`docs/audio-mode.md`](docs/audio-mode.md).

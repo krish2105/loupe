@@ -14,7 +14,8 @@ export type CollectionKey =
   | "history"
   | "watch_later"
   | "liked"
-  | "subscriptions";
+  | "subscriptions"
+  | "downloads";
 
 /**
  * Membership-specific extras. History carries a resume position; an AI-composed
@@ -26,6 +27,8 @@ export type ItemContext = {
   completed?: boolean;
   start_sec?: number;
   note?: string;
+  /** Downloads: what the transfer came to. Null while it is still running. */
+  bytes?: number | null;
 };
 
 export type CollectionItem = VideoSummary & { context?: ItemContext };

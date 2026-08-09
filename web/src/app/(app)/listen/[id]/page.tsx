@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AiPanel } from "@/components/ai/AiPanel";
+import { DownloadButton } from "@/components/audio/DownloadButton";
 import { PlayAllButton, QueueActions, RadioButton } from "@/components/audio/PlayControls";
 import { TranscriptView } from "@/components/audio/TranscriptView";
 import { Comments } from "@/components/content/Comments";
@@ -85,6 +86,7 @@ export default async function EpisodePage({
           <PlayAllButton episodes={[asEpisode]} label="Play episode" />
           <RadioButton episodes={radio?.items ?? []} />
           <QueueActions episode={asEpisode} />
+          <DownloadButton episode={asEpisode} />
         </div>
 
         {episode.description && (

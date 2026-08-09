@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { DownloadButton } from "@/components/audio/DownloadButton";
 import { PlayAllButton, QueueActions } from "@/components/audio/PlayControls";
 import { Avatar } from "@/components/shell/Avatar";
 import { getEpisodes } from "@/lib/audio";
@@ -102,6 +103,7 @@ export default async function ListenPage() {
                     label="Play"
                   />
                   <QueueActions episode={episode} />
+                  <DownloadButton episode={episode} />
                 </div>
               </li>
             ))}

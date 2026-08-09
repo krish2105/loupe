@@ -42,6 +42,7 @@ const YOURS: Item[] = [
   { href: "/playlists", label: "Playlists", icon: "playlists" },
   { href: "/saved", label: "Watch later", icon: "watchLater" },
   { href: "/saved?list=liked", label: "Liked videos", icon: "liked" },
+  { href: "/downloads", label: "Downloads", icon: "download" },
 ];
 
 function isActive(pathname: string, href: string) {
