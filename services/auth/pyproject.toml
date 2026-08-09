@@ -1,0 +1,35 @@
+[project]
+name = "loupe-auth"
+version = "0.1.0"
+description = "Local development identity provider — GoTrue-compatible, never deployed"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "asyncpg>=0.30",
+    "pydantic-settings>=2.6",
+    "pyjwt>=2.9",
+    "email-validator>=2.3.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "asgi-lifespan>=2.1",
+    "httpx>=0.27",
+    "ruff>=0.8",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Header", "fastapi.Path", "fastapi.Query"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

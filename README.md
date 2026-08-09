@@ -105,14 +105,14 @@ Full reasoning, including what the split costs:
 | Player abstraction | Seek/play/pause/time store, verified against a real stream |
 | Progress + resume | Append-only writes with JWT auth; endpoints tested against Postgres |
 | Media service | Bunny upload signing, webhook, signed playback URLs — **provider calls unverified** |
-| Auth | Supabase Auth wired; **unverified — needs provisioning** |
+| Auth | Sign-in, sign-up and session refresh, **verified end to end in a browser** |
 | Core API | FastAPI, health, pipeline dashboard, watch events, resume, collections |
 | CI | Nine jobs: web, API, AI, eval, recsys, media, ingest, pipeline, schema |
 | Staging deploy | Live at [web-jade-two-b023n56l0y.vercel.app](https://web-jade-two-b023n56l0y.vercel.app) |
 
-Test counts: 114 web, 96 API, 53 AI, 40 eval, 43 recsys, 12 media, 19 ingest,
-49 pipeline, 21 schema assertions. **447 in total**, all green in CI across nine
-jobs.
+Test counts: 114 web, 96 API, 53 AI, 40 eval, 43 recsys, 15 auth, 12 media,
+19 ingest, 49 pipeline, 21 schema assertions. **462 in total**, all green in CI
+across ten jobs.
 
 Seed a browsable catalogue locally with:
 
@@ -126,6 +126,13 @@ roughly the §4.1 shape of a real platform with an indexing backlog.
 ## Running it
 
 Requires Node 22+, pnpm, Python 3.11+, uv, and Postgres 17 with pgvector.
+
+Sign-in works locally without any hosted service. `services/auth` is a
+development identity provider that speaks GoTrue's API, so the app's Supabase
+client talks to it unchanged, and it refuses to start outside
+`ENVIRONMENT=local` ([ADR 0004](docs/adr/0004-development-identity-provider.md)).
+Point the two `NEXT_PUBLIC_SUPABASE_*` variables at a real Supabase project when
+there is one; nothing else changes.
 
 ```bash
 brew install postgresql@17 pgvector && brew services start postgresql@17
@@ -150,6 +157,8 @@ services/ingest/  Nightly referenced-content sync, quota accounting
 services/pipeline/ Transcription, chunking, embedding, chapter detection
 services/ai/      Summarising, ask-video, semantic search, playlist composition
                   — the only service that holds a model key or a prompt
+services/auth/    Development-only identity provider. Refuses to start outside
+                  ENVIRONMENT=local. See ADR 0004
 services/eval/    Golden set, metrics, and the evaluation runner
 services/recsys/  Personas, candidate generation, ranking, offline evaluation
 db/               SQL migrations, constraint tests, migration runner
@@ -183,10 +192,10 @@ Reported per §18.1. Nothing here is rounded up.
 
 | Phase | Gate | Status |
 |---|---|---|
-| 0 — Foundations | A logged-in user sees an empty shell on a public URL | **PARTIAL** — public URL and shell met; no sign-in has ever succeeded ([detail](#phase-0-detail)) |
+| 0 — Foundations | A logged-in user sees an empty shell on a public URL | **MET locally, PARTIAL on the public URL** — sign-in works end to end against the development identity provider; the deployed instance still has no auth backend ([detail](#phase-0-detail)) |
 | 1 — Media spine | One video plays adaptively with working seek and resume | **PARTIAL** — plays and seeks; upload and transcode blocked on Bunny credentials |
-| 2 — Core surfaces | A visitor can browse, watch, and comment | **PARTIAL** — browse and watch verified; posting a comment has never completed, because it needs a session |
-| 3 — Identity surfaces | All four built on the shared list abstraction, not four one-offs | **MET** — one `Collection` declaration each, one loader, one web component behind four routes |
+| 2 — Core surfaces | A visitor can browse, watch, and comment | **MET** — all three verified in a browser, including a comment posted through the real API |
+| 3 — Identity surfaces | All four built on the shared list abstraction, not four one-offs | **MET** — one `Collection` declaration each, one loader, one web component behind four routes. Likes, saves and subscriptions now verified writing through from the browser |
 | 4 — Referenced ingest | 1,500+ Class B videos in the feed; unavailable states designed | **MET** — 3,048 across 37 channels, with designed unavailable states. From a fixture provider, not the real API |
 | 5 — Pipeline | 50 hours indexed; stage machine survives forced failure injection | **PARTIAL** — failure injection met and tested; 7 hours indexed, not 50 |
 | 6 — AI layer | Citation-seek works end to end; refusal behaviour verified | **MET** — clicking a citation seeks the player; refusal verified by tests and by the eval harness. On fixture transcripts |
@@ -195,8 +204,8 @@ Reported per §18.1. Nothing here is rounded up.
 | 9 — Recsys | Beats popularity baseline, or the failure is analysed | **MET via the second clause** — it loses, and [`docs/recommendations.md`](docs/recommendations.md) is the analysis |
 | 10 — Ship | Public URL, three-minute demo, architecture writeup | **PARTIAL** — URL and writeup done; the demo exists as a shot-by-shot script, because recording video is not something I can do |
 
-Five met, five partial, one not met. Every partial is blocked on either a
-credential or hardware, and each one says which.
+Seven met, three partial, one not met. Every remaining partial is blocked on
+either a credential or hardware, and each one says which.
 
 The design system is frozen as of Phase 2, per §18.3.
 
@@ -204,20 +213,20 @@ The design system is frozen as of Phase 2, per §18.3.
 
 The gate is: *a logged-in user sees an empty shell on a public URL.*
 
-**PARTIAL — two of three clauses met.**
+**MET locally. PARTIAL on the public URL.**
 
 | Clause | State |
 |---|---|
 | Public URL | **Met.** <https://web-jade-two-b023n56l0y.vercel.app> returns 200 on `/`, `/login`, and `/system` |
-| Empty shell | **Met.** Rail, search capsule, empty state, both themes |
-| Logged-in user | **Not met.** No Supabase project, so no sign-in has ever succeeded |
+| Empty shell | **Met.** Both themes, all surfaces |
+| Logged-in user | **Met locally.** Sign-up, sign-in, session refresh and a signed-in shell all verified in a browser against `services/auth` |
 
-The auth code path is complete and builds, but complete is not the same as
-verified, and nothing here should claim a round-trip that has not happened.
-Local development runs against Homebrew Postgres because this machine has no
-Docker, which rules out `supabase start`.
+What is still missing is a hosted auth backend for the deployed instance, which
+needs a Supabase project — an account I cannot create on someone else's behalf.
+The local provider exists precisely because that blocked verification of five
+gates for eleven phases ([ADR 0004](docs/adr/0004-development-identity-provider.md)).
 
-**To close it** (about ten minutes):
+**To close the remaining clause** (about ten minutes):
 
 1. Create a free Supabase project.
 2. Put `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in
@@ -227,8 +236,23 @@ Docker, which rules out `supabase start`.
    DATABASE_URL="<supabase pooler url>" ./db/migrate.sh
    psql "$DATABASE_URL" -f db/migrations/supabase/0001_auth_link.sql
    ```
-4. Redeploy, sign up, and confirm the shell renders with the account control
-   showing the signed-in initial.
+4. Redeploy. No application code changes: the same client, the same token
+   verification, a different issuer.
+
+### What signing in unblocked
+
+Six things had been written and tested server-side and never once completed a
+round trip from a browser. All six now have:
+
+| | |
+|---|---|
+| Sign up, sign in, session refresh | **Verified** |
+| Posting a comment | **Verified** — row in `comments` |
+| Likes and saves | **Verified** — row in `saved_items` |
+| Subscribing to a channel | **Verified** — row in `subscriptions` |
+| Watch-progress writes | **Verified** — rows in `watch_events` |
+| Composing an AI playlist | **Verified** — playlist with 8 items and per-item start times |
+| Recording a download | **Verified** — 12,132,238 bytes, matching the CDN |
 
 ## Evaluation
 

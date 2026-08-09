@@ -47,3 +47,4 @@ coverage/
 
 # Vercel CLI link metadata
 web/.vercel/
+.env.local.shared

@@ -118,6 +118,23 @@ jobs:
       # ever runs in CI is a benchmark nobody reads.
       - run: uv run pytest -q
 
+  auth:
+    name: Auth
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/auth
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups
+      - run: uv run ruff check .
+      # The tests that matter here are the ones asserting this service refuses
+      # to start outside development, and they need no database.
+      - run: uv run pytest -q
+
   recsys:
     name: Recsys
     runs-on: ubuntu-latest

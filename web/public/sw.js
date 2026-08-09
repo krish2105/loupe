@@ -80,7 +80,19 @@ self.addEventListener("fetch", (event) => {
   // at audio quality, on a page showing a video player. Online gets the real
   // manifest; only a failed fetch falls back to what was stored.
   event.respondWith(
-    fetch(request).catch(() => serveDownloaded(request)),
+    (async () => {
+      try {
+        return await fetch(request);
+      } catch (error) {
+        // Only substitute a download when there actually is one. Returning a
+        // synthetic error on a miss replaced every genuine network failure with
+        // an indistinguishable one, which is how a browser-cache problem spent
+        // an afternoon looking like a service-worker problem.
+        const downloaded = await serveDownloaded(request);
+        if (downloaded) return downloaded;
+        throw error;
+      }
+    })(),
   );
 });
 
@@ -90,7 +102,7 @@ async function serveDownloaded(request) {
   // Matched on URL rather than on the Request, because the Request carries the
   // Range header and the stored entry is the whole file.
   const stored = await cache.match(request.url);
-  if (!stored) return Response.error();
+  if (!stored) return null;
 
   const range = request.headers.get("range");
   if (!range) return stored;

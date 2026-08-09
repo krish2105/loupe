@@ -15,6 +15,17 @@ import {
  * surfaces as a rejected promise on the button that started it. The service
  * worker's only job is serving what this put there.
  *
+ * Every fetch here is `cache: "no-store"`, and that is a fix rather than a
+ * precaution. Downloading, deleting and re-downloading the same episode failed
+ * on the second attempt with a bare "Failed to fetch", while the identical URL
+ * with a cache-busting query parameter returned 200. The CDN sends
+ * `Vary: Origin, Access-Control-Request-Headers, Access-Control-Request-Method`,
+ * so its responses are stored per header variant, and a request issued from a
+ * different context than the one that filled the entry can miss the variant and
+ * fail rather than revalidate. A download should be reading from the network
+ * anyway: the whole point is to obtain the bytes, not to consult a cache that
+ * may hold part of them.
+ *
  * What gets stored, for one episode:
  *
  *   - a rewritten master playlist, offering only the audio rendition
@@ -52,7 +63,7 @@ export async function downloadEpisode(
 
   const cache = await caches.open(MEDIA_CACHE);
 
-  const masterResponse = await fetch(hlsUrl, { signal });
+  const masterResponse = await fetch(hlsUrl, { signal, cache: "no-store" });
   if (!masterResponse.ok) throw new DownloadFailed("Could not read the stream.");
   const masterText = await masterResponse.text();
 
@@ -63,7 +74,7 @@ export async function downloadEpisode(
     throw new DownloadFailed("This talk has no separate audio track to download.");
   }
 
-  const playlistResponse = await fetch(rendition.url, { signal });
+  const playlistResponse = await fetch(rendition.url, { signal, cache: "no-store" });
   if (!playlistResponse.ok) throw new DownloadFailed("Could not read the audio track.");
   const playlistText = await playlistResponse.text();
 
@@ -134,7 +145,7 @@ async function fetchWithProgress(
   signal: AbortSignal | undefined,
   onProgress?: (progress: DownloadProgress) => void,
 ): Promise<ArrayBuffer> {
-  const response = await fetch(url, { signal });
+  const response = await fetch(url, { signal, cache: "no-store" });
   if (!response.ok || !response.body) {
     throw new DownloadFailed("Could not read the audio.");
   }
