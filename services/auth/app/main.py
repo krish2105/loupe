@@ -33,6 +33,26 @@ def _checked_dsn(url: str) -> str:
             "If that looks like a placeholder, it was pasted without being "
             "replaced."
         )
+    # A password that is obviously still a placeholder. Postgres answers this
+    # with `password authentication failed for user "postgres"`, which is true
+    # and sends people to reset a password that was never wrong.
+    password = ""
+    if "@" in url:
+        credentials = url.split("://", 1)[1].rsplit("@", 1)[0]
+        password = credentials.split(":", 1)[1] if ":" in credentials else ""
+
+    stripped = password.strip("[]<>{}").replace("-", "").replace("_", "").lower()
+    if stripped in {"yourpassword", "password", "changeme", "yourdbpassword"} or (
+        password.startswith("<") and password.endswith(">")
+    ):
+        raise RuntimeError(
+            f"DATABASE_URL still has a placeholder password ({password!r}).\n"
+            "Replace it with the real one from Supabase → Project Settings → "
+            "Database.\n"
+            "Set it once instead of pasting it repeatedly:\n"
+            '  export LOUPE_DB="postgresql://...", then use "$LOUPE_DB"'
+        )
+
     # asyncpg accepts both schemes; normalising means one form downstream.
     return url.replace("postgres://", "postgresql://", 1)
 
