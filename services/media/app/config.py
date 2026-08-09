@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     # it is regenerated on every fetch, so there is no benefit to a long one.
     s3_segment_ttl_sec: int = 60 * 60
 
+    # Origins allowed to call this service from a page. Same shape as the core
+    # API's, comma-separated, because two services with the same job should not
+    # be configured two different ways.
+    cors_origins: str = "http://localhost:3000"
+
     # Where the browser reaches this service. Rewritten playlists point back
     # here for nested playlists, and a relative URL will not do — the player
     # resolves it against the bucket, not against us.

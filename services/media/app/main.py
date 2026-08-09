@@ -5,7 +5,9 @@ import time
 from contextlib import asynccontextmanager
 from uuid import UUID
 
+from asyncpg.exceptions import ForeignKeyViolationError
 from fastapi import FastAPI, HTTPException, Path, Response
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from . import bunny, db, playlist, storage
@@ -32,6 +34,18 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Loupe media service", version="0.1.0", lifespan=lifespan)
+
+# The browser talks to this service directly — for an upload ticket, and for
+# every playlist during playback — so it needs the same origin allow-list the
+# core API has. Its absence went unnoticed for as long as upload answered 503
+# to everything: nothing had ever called this from a page.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class UploadRequest(BaseModel):
@@ -109,20 +123,36 @@ async def create_upload(request: UploadRequest) -> UploadTicket:
         # The row is written before the bytes arrive, exactly as on the Bunny
         # path: whatever reports the transcode finishing needs a row to update,
         # and it may well get there first.
-        async with pool.acquire() as connection:
-            await connection.execute(
-                """
-                INSERT INTO video_assets (video_id, provider, provider_guid)
-                VALUES ($1, 's3', $2)
-                ON CONFLICT (video_id) DO UPDATE SET provider_guid = EXCLUDED.provider_guid
-                """,
-                request.video_id,
-                video_id,
-            )
-            await connection.execute(
-                "UPDATE videos SET processing_status = 'uploaded' WHERE id = $1",
-                request.video_id,
-            )
+        try:
+            async with pool.acquire() as connection:
+                await connection.execute(
+                    """
+                    INSERT INTO video_assets (video_id, provider, provider_guid)
+                    VALUES ($1, 's3', $2)
+                    ON CONFLICT (video_id) DO UPDATE SET provider_guid = EXCLUDED.provider_guid
+                    """,
+                    request.video_id,
+                    video_id,
+                )
+                await connection.execute(
+                    "UPDATE videos SET processing_status = 'uploaded' WHERE id = $1",
+                    request.video_id,
+                )
+        except ForeignKeyViolationError:
+            # Answered as a 404 rather than allowed to become a 500, and not
+            # only for tidiness: Starlette's error handler sits outside the CORS
+            # middleware, so an unhandled exception reaches the browser with no
+            # `Access-Control-Allow-Origin` at all. The fetch then rejects, and
+            # a page that cannot tell a blocked response from a dead socket
+            # reports "could not reach the media service" about a service that
+            # is running and answering. Which is exactly what happened.
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    "No video record to attach this upload to. Create the video "
+                    "through the core API first, then request a ticket for its id."
+                ),
+            ) from None
 
         return UploadTicket(
             upload_url=storage.upload_url(video_id, "original", ttl=3600),
