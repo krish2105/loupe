@@ -29,11 +29,13 @@ coverage/
 # Local media and pipeline artifacts. Transcription output is large and
 # reproducible; §10.3 exports it as a portable artifact loaded into the
 # database, not committed.
+#
+# HLS output stays inside these directories on purpose. Do NOT add a bare
+# `*.ts` pattern for transport-stream segments — it matches every TypeScript
+# source file in the repository, which is a silent and very confusing failure.
 /media/
 /artifacts/
 *.mp4
-*.m3u8
-*.ts
 *.wav
 
 # OS and editor
