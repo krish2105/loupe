@@ -243,6 +243,24 @@ Recorded as they are incurred, per the working agreement.
 - **Performance targets are unmeasured.** LCP under 2.5s and player
   time-to-first-frame under 1.5s need a deployed API to test against.
 
+## Planned: audio mode
+
+After Phase 10, Loupe gains an audio-first mode for spoken audio — podcasts,
+interviews, conference recordings — with the playback controls of a music app:
+persistent queue, shuffle, repeat, radio, background playback with OS media
+controls, offline downloads, and a time-synced transcript view.
+
+Spoken audio rather than music, deliberately. Streaming real music needs
+licensing this project does not have, and CC catalogues are overwhelmingly
+instrumental — so the semantic layer, which is the entire differentiator, would
+do nothing. Spoken audio inverts that: every capability already built applies
+unchanged. The time-synced view is a lyrics panel in a music app and needs
+licensed data; here it is the transcript, and the word-level timestamps already
+exist.
+
+Decision and scope: [ADR 0003](docs/adr/0003-audio-mode.md). Data model, with
+the alternative costed: [audio-data-model.md](docs/design/audio-data-model.md).
+
 ## Out of scope
 
 Deliberate exclusions, not omissions: content moderation and trust & safety,
