@@ -54,7 +54,28 @@ export type QueueSnapshot = {
  */
 type Positions = Record<string, number>;
 
-const STORAGE_KEY = "loupe.queue.v1";
+/**
+ * Bumping this discards every saved queue, which is the point.
+ *
+ * A track persists its `src`, so a queue written before a stream URL changed
+ * replays the old one forever and no amount of fixing the database reaches it.
+ * That is not hypothetical: the fixture stream had to move CDNs, and every
+ * browser that had played anything kept requesting the dead one — the catalogue
+ * was correct, the API was correct, and playback was still broken until site
+ * data was cleared by hand.
+ *
+ * Nobody should have to clear site data to recover from a URL change, so the
+ * version moves instead. Losing a queue is a small cost; a queue that cannot
+ * play is a larger one. Resume positions come back from the API on the next
+ * play, so nothing that took real effort to accumulate is lost here.
+ *
+ * Caching a URL with no expiry is the underlying flaw and it will bite again
+ * when Bunny lands, because signed URLs expire on a timer rather than on a
+ * deploy. The fix then is to stop persisting `src` and re-resolve it from the
+ * catalogue on restore. Doing that now would mean building an async
+ * re-resolution path for a provider that is not wired up yet.
+ */
+const STORAGE_KEY = "loupe.queue.v2";
 
 /** Cycles in the order the button implies: none, then all, then just this one. */
 const REPEAT_CYCLE: RepeatMode[] = ["off", "all", "one"];
