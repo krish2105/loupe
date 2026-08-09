@@ -53,9 +53,14 @@ environment variables because it was built to speak the same API.
 
 ## 2. API and workers — Render
 
-`render.yaml` at the repository root is a Blueprint covering all five: the core
-API, the AI service, the media service, the nightly ingest cron and the pipeline
-cron.
+`render.yaml` at the repository root is a Blueprint covering three web services:
+the core API, the AI service and the media service.
+
+The two batch jobs are not in it. **Render has no free plan for cron jobs** — a
+Blueprint listing one is rejected with `free not a valid plan for service type
+cron` — so the nightly ingest and the pipeline run from
+`.github/workflows/scheduled.yml`, which is free on a public repository and
+needs nothing but a `DATABASE_URL` secret. See [step 2b](#2b-the-batch-jobs).
 
 1. **New → Blueprint**, point it at the repository. Render reads `render.yaml`.
 2. Fill in the prompted secrets. Every one is marked `sync: false`, which is
@@ -69,10 +74,33 @@ cron.
    | `AI_SERVICE_URL` | api | `https://loupe-ai.onrender.com`, once it exists |
    | `GEMINI_API_KEY` | ai | Optional — absent, answers stay extractive |
    | `BUNNY_*`, `WEBHOOK_SECRET` | media | Step 4, or leave empty and skip media |
-   | `YOUTUBE_API_KEY` | ingest | Optional — absent, the fixture provider runs |
+   | `YOUTUBE_API_KEY` | — | Moved to GitHub Actions; see step 2b |
 
 3. Deploy. `AI_SERVICE_URL` is a chicken-and-egg: deploy, take the AI service's
    URL, set it on the API, redeploy the API.
+
+### 2b. The batch jobs
+
+Add two repository secrets under **Settings → Secrets and variables → Actions**:
+
+| Secret | |
+|---|---|
+| `DATABASE_URL` | The Supabase pooler URL |
+| `YOUTUBE_API_KEY` | Optional — absent, the ingest worker runs against its fixture provider |
+
+`.github/workflows/scheduled.yml` then runs ingest nightly and the pipeline
+hourly, and both can be triggered by hand from the Actions tab. Without
+`DATABASE_URL` they skip cleanly rather than failing, so a fork does not collect
+red checks for secrets it was never going to have.
+
+Scheduled workflows are best-effort and GitHub delays them under load, sometimes
+by a lot. That is fine for both: the pipeline is resumable and idempotent
+(§10.1), so a missed run costs nothing and a re-run over finished work is free.
+
+To move them to Render instead, add the two `type: cron` services back with
+`plan: starter`. Render bills cron jobs by run time; at these schedules it is
+roughly $2 a month, and it buys reliable scheduling and one place to look at
+logs.
 
 Two things about the free tier that will otherwise look like bugs:
 
@@ -127,7 +155,7 @@ unverified.
 
 ## 5. Transcription
 
-`render.yaml` runs the pipeline every thirty minutes with `USE_REAL_MODELS=false`,
+The scheduled workflow runs the pipeline hourly with `USE_REAL_MODELS=false`,
 which produces fixture transcripts. Real transcription runs at roughly 1×
 realtime on CPU and does not belong on a free web instance.
 
@@ -155,7 +183,8 @@ The cost ceiling is enforced in the worker rather than by discipline —
 | | Plan | |
 |---|---|---|
 | Vercel | Hobby | $0 |
-| Render | Free × 5 | $0, with sleeping instances |
+| Render | Free × 3 | $0, with sleeping instances |
+| GitHub Actions | Public repo | $0 for the two batch jobs |
 | Supabase | Free | $0, 500MB and 2 CPU-hours a week |
 | Bunny Stream | Pay as you go | ~$4/month at this scale |
 | Gemini | Free tier | $0, with a hard cap in the worker |

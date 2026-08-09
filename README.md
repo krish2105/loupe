@@ -147,10 +147,14 @@ project: [`docs/running.md`](docs/running.md).
 The web app is on Vercel. Nothing else is deployed yet, which is why the staging
 URL browses and does not do anything.
 
-`render.yaml` is a Blueprint covering the API, the AI service, the media
-service, and the ingest and pipeline crons. Step-by-step, with what each step
-unblocks and the two free-tier behaviours that otherwise look like bugs:
-[`docs/deploying.md`](docs/deploying.md).
+`render.yaml` is a Blueprint covering the API, the AI service and the media
+service. The two batch jobs — nightly ingest and the pipeline — run from
+`.github/workflows/scheduled.yml` instead, because Render has no free plan for
+cron jobs and both are batches that start, work and exit rather than the
+long-running processes §14 put on Render.
+
+Step-by-step, with what each step unblocks and the free-tier behaviours that
+otherwise look like bugs: [`docs/deploying.md`](docs/deploying.md).
 
 Four accounts are needed and none can be created on your behalf: Supabase
 (database and auth in one free tier), Render, Vercel, and optionally Bunny for
@@ -177,7 +181,7 @@ services/eval/    Golden set, metrics, and the evaluation runner
 services/recsys/  Personas, candidate generation, ranking, offline evaluation
 db/               SQL migrations, constraint tests, migration runner
 dev.sh            Starts everything locally
-render.yaml       Render Blueprint for the API and workers
+render.yaml       Render Blueprint for the three web services
 docs/             Plan, architecture writeup, decisions, ADRs, evaluation
 ```
 

@@ -1,0 +1,128 @@
+name: Scheduled jobs
+
+# The two batch jobs, §4.2's nightly ingest and §10.1's pipeline.
+#
+# They run here rather than on Render because Render has no free plan for cron
+# jobs, and both of these are batches that start, claim whatever is eligible and
+# exit — not the long-running processes §14 put on Render. The pipeline is
+# resumable and idempotent, so a missed run costs nothing and a re-run over
+# finished work is free.
+#
+# Scheduled workflows are best-effort: GitHub delays them under load, sometimes
+# by a lot. That is fine for both. It would not be fine for anything a person is
+# waiting on, which is why `workflow_dispatch` is here too.
+#
+# Neither job runs without DATABASE_URL configured as a repository secret, and
+# both skip cleanly rather than failing when it is absent — a fork should not
+# get red checks for secrets it was never going to have.
+
+on:
+  schedule:
+    # 03:17 UTC. Off the hour on purpose: everything scheduled on the hour
+    # competes for the same runners.
+    - cron: "17 3 * * *"
+    # Hourly, at 41 past. Uploads are the only thing that creates work between
+    # ingest runs, and there is no media provider connected yet.
+    - cron: "41 * * * *"
+  workflow_dispatch:
+    inputs:
+      job:
+        description: Which job to run
+        type: choice
+        options: [pipeline, ingest, both]
+        default: both
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never two pipeline runs at once. The stage machine claims jobs and would
+  # survive it, but two runs racing for the same rows is a way to discover
+  # whether that is true rather than a reason to.
+  group: scheduled-jobs
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    name: Nightly ingest
+    # The hourly schedule must not trigger this: §4.2 rule 1 allows one batch a
+    # night against the third-party API, and the quota ledger fails closed but
+    # should never be the thing that stops it.
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.job != 'pipeline'
+      || github.event.schedule == '17 3 * * *'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/ingest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Skip when there is no database
+        id: check
+        run: |
+          if [ -z "${{ secrets.DATABASE_URL }}" ]; then
+            echo "No DATABASE_URL secret; nothing to sync."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.check.outputs.ready == 'true'
+        run: uv sync --frozen --no-dev
+
+      - if: steps.check.outputs.ready == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ENVIRONMENT: production
+          # Absent, the worker runs against its deterministic fixture provider.
+          # The quota ledger, the idempotency and the write path are the same
+          # either way; only the upstream differs.
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          DAILY_QUOTA_UNITS: "2000"
+          MAX_PAGES_PER_CHANNEL: "2"
+        run: uv run python -m app.run
+
+  pipeline:
+    name: Pipeline
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.job != 'ingest'
+      || github.event.schedule == '41 * * * *'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/pipeline
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Skip when there is no database
+        id: check
+        run: |
+          if [ -z "${{ secrets.DATABASE_URL }}" ]; then
+            echo "No DATABASE_URL secret; nothing to process."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.check.outputs.ready == 'true'
+        run: uv sync --frozen --no-dev
+
+      - if: steps.check.outputs.ready == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ENVIRONMENT: production
+          # Whisper on a shared runner is neither fast enough nor large enough,
+          # and §10.3 puts the real backfill on free GPU compute as a batch that
+          # is loaded in afterwards. This keeps the machine moving; it does not
+          # pretend to transcribe.
+          USE_REAL_MODELS: "false"
+          # §10.3's cost ceiling, read before a job is claimed.
+          TRANSCRIPTION_MINUTES_CAP: "3000"
+        run: uv run python -m app.run --all

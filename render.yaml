@@ -4,7 +4,20 @@
 # because the pipeline and the ingest worker are processes rather than request
 # handlers and do not fit a serverless model.
 #
-# Four things are true about this file and worth stating before the YAML.
+# Five things are true about this file and worth stating before the YAML.
+#
+# The two batch jobs are not here. Render has no free plan for cron jobs — the
+# Blueprint is rejected outright with "free not a valid plan for service type
+# cron" — so the nightly ingest and the pipeline run from
+# .github/workflows/scheduled.yml instead, which is free on a public repository
+# and needs nothing but DATABASE_URL. Moving them to a paid Render plan is a
+# two-line change and about $2 a month; see docs/deploying.md.
+#
+# That is a smaller compromise than it looks. §14 puts workers on Render because
+# "long-running processes required, so not serverless" — but these two are
+# batches that start, claim whatever is eligible, and exit. The pipeline is
+# resumable and idempotent by design (§10.1), so where it runs from matters much
+# less than that it runs at all.
 #
 # services/auth is deliberately absent. It is a development identity provider
 # (ADR 0004) and it refuses to start unless ENVIRONMENT=local, so deploying it
@@ -126,64 +139,3 @@ services:
       # unguessable path segment. openssl rand -hex 32
       - key: WEBHOOK_SECRET
         sync: false
-
-  # ------------------------------------------------------------ ingest -------
-  # §4.2 rule 1: a nightly batch, never a runtime call, and never the third
-  # party's search endpoint. A cron job rather than a worker, because "runs once
-  # a night" is a schedule and not a process.
-  - type: cron
-    name: loupe-ingest
-    runtime: python
-    plan: free
-    region: frankfurt
-    rootDir: services/ingest
-    schedule: "17 3 * * *"
-    buildCommand: pip install uv && uv sync --frozen --no-dev
-    startCommand: uv run python -m app.run
-    envVars:
-      - key: ENVIRONMENT
-        value: production
-      - key: PYTHON_VERSION
-        value: "3.12"
-      - key: DATABASE_URL
-        sync: false
-      # Empty selects the fixture provider, which is what the deployed
-      # catalogue currently runs on. Set it and the same code walks real
-      # channels.
-      - key: YOUTUBE_API_KEY
-        sync: false
-      # Far below the real 10,000/day, so a runaway loop hits our ceiling first.
-      - key: DAILY_QUOTA_UNITS
-        value: "2000"
-      - key: MAX_PAGES_PER_CHANNEL
-        value: "2"
-
-  # ---------------------------------------------------------- pipeline -------
-  # Resumable by design (§10.1), so running it on a schedule loses nothing: each
-  # run claims whatever is eligible and a re-run over finished work is free.
-  #
-  # USE_REAL_MODELS stays false here. Whisper on a free instance is neither fast
-  # enough nor large enough, and §10.3 puts the real backfill on free GPU
-  # compute as a batch, loaded in afterwards.
-  - type: cron
-    name: loupe-pipeline
-    runtime: python
-    plan: free
-    region: frankfurt
-    rootDir: services/pipeline
-    schedule: "*/30 * * * *"
-    buildCommand: pip install uv && uv sync --frozen --no-dev
-    startCommand: uv run python -m app.run --all
-    envVars:
-      - key: ENVIRONMENT
-        value: production
-      - key: PYTHON_VERSION
-        value: "3.12"
-      - key: DATABASE_URL
-        sync: false
-      - key: USE_REAL_MODELS
-        value: "false"
-      # §10.3: the transcription cost ceiling, enforced by code rather than by
-      # discipline. The worker reads it before claiming a job.
-      - key: TRANSCRIPTION_MINUTES_CAP
-        value: "3000"
