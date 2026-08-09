@@ -123,7 +123,16 @@ export class PlayerStore {
   };
 
   play = (): void => {
-    void this.media?.play();
+    const started = this.media?.play();
+
+    // play() returns a promise that rejects with AbortError whenever it is
+    // interrupted — by a pause, a seek, or a source change. Every one of those
+    // is normal here, since a citation click seeks and plays in the same tick.
+    // Without this catch it surfaces as an unhandled rejection in the console.
+    if (started && typeof started.catch === "function") {
+      started.catch(() => {});
+    }
+
     this.sync();
   };
 

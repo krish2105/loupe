@@ -8,7 +8,14 @@ import { PlayerStore, type MediaLike } from "./player-store";
  * seeks in place, and that writes before metadata do not stick. Faking it keeps
  * the citation-seek contract testable in CI without a browser.
  */
-function fakeMedia(overrides: Partial<{ duration: number; readyState: number }> = {}) {
+function fakeMedia(
+  overrides: Partial<{
+    duration: number;
+    readyState: number;
+    /** Reproduces the AbortError a real element throws on an interrupted play. */
+    playRejects: boolean;
+  }> = {},
+) {
   const listeners = new Map<string, Set<() => void>>();
 
   const media = {
@@ -16,7 +23,10 @@ function fakeMedia(overrides: Partial<{ duration: number; readyState: number }> 
     duration: overrides.duration ?? 600,
     paused: true,
     readyState: overrides.readyState ?? 1,
-    play: vi.fn(function (this: typeof media) {
+    play: vi.fn((): Promise<void> | void => {
+      if (overrides.playRejects) {
+        return Promise.reject(new DOMException("interrupted", "AbortError"));
+      }
       media.paused = false;
       media.emit("play");
     }),
@@ -134,6 +144,23 @@ describe("PlayerStore", () => {
     detach();
     expect(media.listenerCount()).toBe(0);
     expect(store.getSnapshot().isReady).toBe(false);
+  });
+
+  it("swallows the AbortError play() throws when interrupted", async () => {
+    const store = new PlayerStore();
+    // A citation click seeks and plays in the same tick, which is exactly the
+    // sequence that makes play() reject. Unhandled, it hits the console.
+    const media = fakeMedia({ playRejects: true });
+
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+
+    store.attach(media);
+    expect(() => store.play()).not.toThrow();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    process.off("unhandledRejection", unhandled);
+    expect(unhandled).not.toHaveBeenCalled();
   });
 
   it("survives having no media element at all", () => {

@@ -1,7 +1,7 @@
 # ADR 0001 — Media provider
 
-**Status:** Proposed. Decision due at the Phase 1 gate.
-**Amends:** Plan §5.2, which selected Bunny Stream.
+**Status:** Accepted — Bunny Stream, 9 Aug 2026. §5.2 stands unamended.
+**Amends:** Nothing. The re-evaluation was requested and confirmed the original choice.
 
 ## Context
 
@@ -75,9 +75,28 @@ Take R2 if adding a card to Bunny is unacceptable, or if demonstrating a
 hand-built HLS ladder is itself a portfolio goal — it is a legitimate one, just
 not one the plan claimed.
 
-## Not decided here
+## Decision
 
-Phase 0's gate involves no media. The media-service boundary in §5 exists
-precisely so this can be settled later: the core API never holds provider
-credentials, so swapping providers touches one service. The decision is due when
-Phase 1 starts.
+**Bunny Stream**, as originally specified. The re-evaluation was worth running —
+it established that R2 is genuinely an order of magnitude cheaper and that the
+"weeks of work" objection was aimed at a different problem than the one we have
+— but neither of those changes the outcome against a $10 ceiling, and Bunny buys
+back sprite generation and packaging correctness.
+
+The R2 analysis is retained rather than deleted. If the media bill ever becomes
+the constraint, or if a hand-built HLS ladder becomes a portfolio goal in its
+own right, the working is already done.
+
+## Consequence for Phase 1
+
+Bunny is not provisioned yet, so Phase 1 splits:
+
+- **Buildable now:** the custom player, controls, chapter-segmented scrubber,
+  keyboard bindings, resume, and progress writes — verified against a public
+  multi-rendition HLS stream.
+- **Blocked on credentials:** upload signing, the transcode webhook, and
+  playback URL signing.
+
+The §5 media-service boundary is what makes that split clean: the core API never
+holds provider credentials, so the player never learns which provider produced
+its manifest.
