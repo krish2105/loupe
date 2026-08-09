@@ -31,6 +31,17 @@
 # needs pgvector and the same instance backs Supabase Auth. Render's own
 # Postgres has no pgvector on the free tier.
 #
+# VIRTUAL_ENV is cleared on every command. Render exports it pointing at the
+# repository root, each service's environment lives under its own rootDir, and
+# uv warns loudly about the mismatch on every build and every boot:
+#
+#   warning: `VIRTUAL_ENV=/opt/render/project/src/.venv` does not match the
+#   project environment path `.venv` and will be ignored
+#
+# It is only a warning — uv ignores the variable and uses the right environment
+# either way — but a warning that fires twice per deploy and never means
+# anything is how people learn to skim their logs.
+#
 # Free instances sleep after inactivity and take a few seconds to wake. That is
 # fine for everything here except a demo, and it is the reason the cost line in
 # the README says $0–7 rather than $0.
@@ -50,8 +61,8 @@ services:
     plan: free
     region: singapore
     rootDir: services/api
-    buildCommand: pip install uv && uv sync --frozen --no-dev
-    startCommand: uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install uv && VIRTUAL_ENV= uv sync --frozen --no-dev
+    startCommand: VIRTUAL_ENV= uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
       - key: ENVIRONMENT
@@ -97,8 +108,8 @@ services:
     # embedder and semantic search degrades to keyword — which the API reports
     # in its `mode` field rather than hiding. Set USE_REAL_EMBEDDINGS=true and
     # move to a paid instance to change that.
-    buildCommand: pip install uv && uv sync --frozen --no-dev
-    startCommand: uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install uv && VIRTUAL_ENV= uv sync --frozen --no-dev
+    startCommand: VIRTUAL_ENV= uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
       - key: ENVIRONMENT
@@ -126,8 +137,8 @@ services:
     plan: free
     region: singapore
     rootDir: services/media
-    buildCommand: pip install uv && uv sync --frozen --no-dev
-    startCommand: uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install uv && VIRTUAL_ENV= uv sync --frozen --no-dev
+    startCommand: VIRTUAL_ENV= uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
       - key: ENVIRONMENT
