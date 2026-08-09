@@ -100,7 +100,7 @@ either way; only the upstream differs.
 |---|---|
 | `SUPABASE_JWT_SECRET` | Supabase → **Project Settings → API → JWT Settings → JWT Secret** |
 | `NEXT_PUBLIC_SUPABASE_URL` | Same page, **Project URL** |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Same page, **anon public**. Safe in the browser; the `service_role` key next to it is not, and is never used by this project |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Same page. Newer projects show `sb_publishable_…`; older ones call it **anon public** and `NEXT_PUBLIC_SUPABASE_ANON_KEY` works too. Safe in the browser. The **secret** key beside it — `sb_secret_…` or `service_role` — is not, and this project never uses one |
 | `CORS_ORIGINS` | Your Vercel URL, exact, with scheme and no trailing slash |
 | `GEMINI_API_KEY` | <https://aistudio.google.com/apikey>. Optional |
 | `BUNNY_*` | Bunny dashboard → Stream → your library → **API** |
@@ -215,10 +215,13 @@ Environment Variables**, for Production and Preview:
 
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 NEXT_PUBLIC_API_URL=https://loupe-api.onrender.com
 NEXT_PUBLIC_AI_URL=https://loupe-ai.onrender.com
 ```
+
+Older projects call that key `anon public`, and
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` is accepted for them.
 
 Redeploy. Vercel bakes `NEXT_PUBLIC_*` into the build, so setting them without
 redeploying changes nothing.
