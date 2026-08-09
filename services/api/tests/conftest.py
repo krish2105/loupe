@@ -99,6 +99,40 @@ async def seeded(client):
 
 
 @pytest.fixture
+async def many_videos(seeded):
+    """
+    Enough talks that a page boundary genuinely exists.
+
+    The pagination test used to rely on whatever happened to be in the database,
+    which passed locally against the demo seed and failed in CI where only
+    migrations run. A test that needs a populated feed should populate it.
+    """
+    pool = db.pool()
+    ids = []
+
+    async with pool.acquire() as connection:
+        for index in range(6):
+            video_id = uuid.uuid4()
+            await connection.execute(
+                """
+                INSERT INTO videos
+                    (id, source_class, channel_id, title, processing_status, published_at)
+                VALUES ($1, 'owned', $2, $3, 'indexed', now() - ($4 || ' hours')::interval)
+                """,
+                video_id,
+                seeded["channel_id"],
+                f"Paging fixture {index}",
+                str(index),
+            )
+            ids.append(video_id)
+
+    yield ids
+
+    async with pool.acquire() as connection:
+        await connection.execute("DELETE FROM videos WHERE id = ANY($1::uuid[])", ids)
+
+
+@pytest.fixture
 async def referenced_video(client):
     """A Class B video: metadata only, no transcript, no playback."""
     pool = db.pool()

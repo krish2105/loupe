@@ -6,9 +6,10 @@ Search *inside* a talk, ask it questions and get answers that cite the exact
 moment, and land on that moment with one click. Built on an owned catalogue,
 because transcripts are what every interesting feature here depends on.
 
-> **Status: Phase 0 of 11.** Foundations only. There is no video playback, no
-> catalogue, and no AI layer yet. What exists is the schema, the design system,
-> the player abstraction, auth, and CI. See [gate status](#phase-0-gate-status).
+> **Status: Phase 2 of 11.** The catalogue is browsable, talks play adaptively,
+> and comments work. The semantic layer this project exists for — search inside,
+> ask-video, chapters — is Phase 6 and does not exist yet. The search field is
+> present but does nothing. See [gate status](#gate-status).
 
 ---
 
@@ -106,7 +107,19 @@ layer — transcript matches, citation marks, the AI-ready state.
 
 Full direction in [`docs/design/direction.md`](docs/design/direction.md).
 
-## Phase 0 gate status
+## Gate status
+
+Reported per §18.1. Nothing here is rounded up.
+
+| Phase | Gate | Status |
+|---|---|---|
+| 0 — Foundations | A logged-in user sees an empty shell on a public URL | **PARTIAL** — see below |
+| 1 — Media spine | One video plays adaptively with working seek and resume | **PARTIAL** — plays and seeks; resume unverified end to end; upload/transcode blocked on Bunny credentials |
+| 2 — Core surfaces | A visitor can browse, watch, and comment | **PARTIAL** — browse and watch verified; posting a comment has never completed, because it needs a session |
+
+The design system is frozen as of Phase 2, per §18.3.
+
+### Phase 0 detail
 
 The gate is: *a logged-in user sees an empty shell on a public URL.*
 
@@ -154,8 +167,15 @@ Recorded as they are incurred, per the working agreement.
 - **Progress writes have not run end to end.** The endpoints are tested against
   a real Postgres and the throttling logic is tested in isolation, but the
   browser has never sent one, because that needs a signed-in session.
-- **No staging deploy yet**, so the performance targets (LCP under 2.5s, player
-  time-to-first-frame under 1.5s) are unmeasured.
+- **Comment posting has never completed.** The endpoint is tested against a real
+  Postgres including the one-reply-level limit, but the browser path needs a
+  signed-in session, which needs Supabase.
+- **Search does nothing.** The field is present because it is the product's
+  thesis and belongs in the layout from the start; semantic search is Phase 6.
+- **Thumbnails are generated placeholders**, not frames. Real ones arrive with
+  the media provider.
+- **Performance targets are unmeasured.** LCP under 2.5s and player
+  time-to-first-frame under 1.5s need a deployed API to test against.
 
 ## Out of scope
 

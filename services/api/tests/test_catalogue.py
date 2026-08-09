@@ -61,7 +61,7 @@ class TestFeed:
             assert "capabilities" in item
             assert "channel" in item
 
-    async def test_pagination_never_repeats_or_skips(self, client, seeded):
+    async def test_pagination_never_repeats_or_skips(self, client, many_videos):
         first = await client.get("/v1/feed?limit=3")
         cursor = first.json()["next_cursor"]
         assert cursor is not None
