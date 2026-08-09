@@ -62,10 +62,14 @@ services:
       # connection per cold start and Supabase's direct limit is small.
       - key: DATABASE_URL
         sync: false
-      # Supabase → Project Settings → API → JWT Secret. The API verifies access
-      # tokens with this locally, so a progress write every ten seconds costs no
-      # round trip.
+      # Supabase → JWT Keys → Legacy JWT Secret. Only used by projects still
+      # signing symmetrically; a project with JWT signing keys verifies against
+      # SUPABASE_URL's JWKS instead and can leave this empty.
       - key: SUPABASE_JWT_SECRET
+        sync: false
+      # https://<ref>.supabase.co — not a secret, and how asymmetric tokens are
+      # verified. Required for any project created recently, which signs ES256.
+      - key: SUPABASE_URL
         sync: false
       # The deployed web origin. Without it every browser call fails preflight,
       # which is exactly how Phase 2 through Phase 5 shipped with no CORS at all

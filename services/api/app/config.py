@@ -18,10 +18,16 @@ class Settings(BaseSettings):
     #: always a different origin from the services. Comma-separated.
     cors_origins: str = "http://localhost:3000"
 
-    # Supabase signs access tokens with this. Verifying locally avoids a network
-    # round-trip on every history write, which happens every ten seconds of
-    # playback per viewer.
+    # Supabase signs access tokens with this on projects still using the legacy
+    # JWT secret, and the development identity provider signs with it too.
+    # Verifying locally avoids a network round-trip on every history write,
+    # which happens every ten seconds of playback per viewer.
     supabase_jwt_secret: str = ""
+
+    # Projects with JWT signing keys sign asymmetrically, and the public key
+    # comes from the project's JWKS rather than from configuration. Only the
+    # project URL is needed to find it, and it is not a secret.
+    supabase_url: str = ""
 
     # §10.3: the transcription cost ceiling is enforced by code, not discipline.
     # The worker reads this before starting a job and refuses when it is spent.

@@ -1,5 +1,8 @@
 import uuid
 
+import pytest
+from fastapi import HTTPException
+
 from app import db
 
 from .conftest import token_for
@@ -197,3 +200,139 @@ class TestResume:
         )
 
         assert response.json()["position_sec"] is None
+
+
+class TestAsymmetricTokens:
+    """
+    ES256 verification (Supabase JWT signing keys).
+
+    A project created today signs access tokens asymmetrically, so the API has
+    to verify against the project's public JWKS. Before this, every real login
+    produced a token the API rejected with 401 and no clue why.
+    """
+
+    def _keypair(self):
+        from cryptography.hazmat.primitives.asymmetric import ec
+
+        private = ec.generate_private_key(ec.SECP256R1())
+        return private, private.public_key()
+
+    def test_a_valid_es256_token_is_accepted(self, monkeypatch):
+        import time
+        import uuid
+
+        import jwt as pyjwt
+
+        from app import auth
+
+        private, public = self._keypair()
+        user_id = uuid.uuid4()
+
+        token = pyjwt.encode(
+            {
+                "sub": str(user_id),
+                "aud": "authenticated",
+                "exp": int(time.time()) + 3600,
+            },
+            private,
+            algorithm="ES256",
+        )
+
+        class FakeKey:
+            key = public
+
+        class FakeJWKS:
+            def get_signing_key_from_jwt(self, _token):
+                return FakeKey()
+
+        monkeypatch.setattr(auth, "_jwks", lambda: FakeJWKS())
+
+        assert auth._decode(token)["sub"] == str(user_id)
+
+    def test_a_public_key_cannot_be_used_as_an_hmac_secret(self, monkeypatch):
+        """
+        The classic JWT confusion attack: take the public key out of the JWKS,
+        sign an HS256 token with it, and hope the server picks its verification
+        key from the token's own `alg`.
+
+        The token is assembled by hand because PyJWT refuses to build it —
+        which protects this project's own code and not an attacker's, so the
+        attack has to be reproduced rather than imported.
+
+        It fails because the two verification paths never share key material.
+        An HS256 token is only ever checked against the configured shared
+        secret, which is not the public key.
+        """
+        import base64
+        import hashlib
+        import hmac
+        import json
+        import time
+        import uuid
+
+        from cryptography.hazmat.primitives import serialization
+
+        from app import auth
+        from app.config import settings
+
+        _, public = self._keypair()
+        public_pem = public.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+
+        def b64(raw: bytes) -> bytes:
+            return base64.urlsafe_b64encode(raw).rstrip(b"=")
+
+        header = b64(json.dumps({"alg": "HS256", "typ": "JWT"}).encode())
+        payload = b64(
+            json.dumps(
+                {
+                    "sub": str(uuid.uuid4()),
+                    "aud": "authenticated",
+                    "exp": int(time.time()) + 3600,
+                }
+            ).encode()
+        )
+        signing_input = header + b"." + payload
+        signature = b64(hmac.new(public_pem, signing_input, hashlib.sha256).digest())
+        forged = (signing_input + b"." + signature).decode()
+
+        from tests.conftest import TEST_JWT_SECRET
+
+        monkeypatch.setattr(settings, "supabase_jwt_secret", TEST_JWT_SECRET)
+
+        with pytest.raises(HTTPException) as raised:
+            auth._decode(forged)
+        assert raised.value.status_code == 401
+
+    def test_the_none_algorithm_is_refused(self):
+        """
+        An unsigned token. Also assembled by hand: PyJWT will not encode with
+        `none` either, for the same reason.
+        """
+        import base64
+        import json
+        import time
+        import uuid
+
+        from app import auth
+
+        def b64(raw: bytes) -> bytes:
+            return base64.urlsafe_b64encode(raw).rstrip(b"=")
+
+        header = b64(json.dumps({"alg": "none", "typ": "JWT"}).encode())
+        payload = b64(
+            json.dumps(
+                {
+                    "sub": str(uuid.uuid4()),
+                    "aud": "authenticated",
+                    "exp": int(time.time()) + 3600,
+                }
+            ).encode()
+        )
+        unsigned = (header + b"." + payload + b".").decode()
+
+        with pytest.raises(HTTPException) as raised:
+            auth._decode(unsigned)
+        assert raised.value.status_code == 401
