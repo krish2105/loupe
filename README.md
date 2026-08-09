@@ -6,7 +6,7 @@ Search *inside* a talk, ask it questions and get answers that cite the exact
 moment, and land on that moment with one click. Built on an owned catalogue,
 because transcripts are what every interesting feature here depends on.
 
-> **Status: Phase 8 of 11.** The catalogue is browsable, talks play adaptively,
+> **Status: Phase 9 of 11.** The catalogue is browsable, talks play adaptively,
 > comments work, and the four identity surfaces are live. Keyword search works;
 > the semantic layer this project exists for — searching *inside* talks,
 > ask-video, chapters — is Phase 6 and does not exist yet. See
@@ -47,6 +47,7 @@ constraints reject it. See [`db/tests/constraints.sql`](db/tests/constraints.sql
 | AI layer | Semantic search, ask-video with refusal, summaries with timestamps |
 | Evaluation | Harness, tested metrics, golden set — **no benchmark yet, deliberately** |
 | Shorts | Vertical snap feed, window policy tested — **playback unverified** |
+| Recommendations | Two-stage model, offline eval — **loses to popularity, analysed** |
 | Design system | Six tokens, two independently designed themes, visible at `/system` |
 | Player | Adaptive HLS, chapter-segmented scrubber, §9.1 keyboard, resume |
 | Player abstraction | Seek/play/pause/time store, verified against a real stream |
@@ -57,7 +58,7 @@ constraints reject it. See [`db/tests/constraints.sql`](db/tests/constraints.sql
 | CI | Web, API, media, and schema jobs |
 | Staging deploy | Live at [web-jade-two-b023n56l0y.vercel.app](https://web-jade-two-b023n56l0y.vercel.app) |
 
-Test counts: 44 web, 55 API, 31 AI, 40 eval, 12 media, 19 ingest, 49 pipeline, 21 schema assertions.
+Test counts: 44 web, 55 API, 31 AI, 40 eval, 43 recsys, 12 media, 19 ingest, 49 pipeline, 21 schema assertions.
 
 Seed a browsable catalogue locally with:
 
@@ -96,6 +97,7 @@ services/pipeline/ Transcription, chunking, embedding, chapter detection
 services/ai/      Summarising, ask-video, semantic search — the only service
                   that holds a model key or contains a prompt
 services/eval/    Golden set, metrics, and the evaluation runner
+services/recsys/  Personas, candidate generation, ranking, offline evaluation
 db/               SQL migrations, constraint tests, migration runner
 docs/             Plan, decisions, ADRs, design direction
 ```
@@ -193,6 +195,36 @@ improve and the product would be no more trustworthy.
 
 Full results, methodology, and what would make this a real benchmark:
 [`docs/evaluation.md`](docs/evaluation.md).
+
+## Recommendations
+
+**The model loses to a popularity baseline, and the failure is analysed rather
+than tuned away.**
+
+```
+                     recall@20   NDCG@20
+two-stage model        0.000      0.000
+popularity baseline    0.020      0.019
+```
+
+Four causes, in order: the task is close to impossible as constructed (3,065
+videos, ~8 held-out items, 20 slots — random scores 0.005); the persona
+generator is stochastic, so even a perfect model cannot know which items were
+drawn; stage-one candidate generation reaches only 18% of the targets because
+3,000 of 3,065 catalogue rows are fixture-generated with identical
+descriptions; and 818 training rows from five users is very little to learn
+from.
+
+The diversity penalty was the obvious suspect and an ablation ruled it out.
+
+The model does personalise weakly — 3.3% of its top-20 comes from each
+persona's preferred channels against 0.0% for the baseline — so the features
+carry some signal and the pipeline is wired correctly.
+
+**A win here would not have meant the recommendations are good.** Personas pick
+by rules; a model trained on their output learns those rules. §12.2 forbids
+presenting synthetic results as real, and the same applies to a synthetic-data
+score. Full analysis: [`docs/recommendations.md`](docs/recommendations.md).
 
 ## Limitations
 

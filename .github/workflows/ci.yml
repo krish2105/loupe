@@ -118,6 +118,24 @@ jobs:
       # ever runs in CI is a benchmark nobody reads.
       - run: uv run pytest -q
 
+  recsys:
+    name: Recsys
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/recsys
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups
+      - run: uv run ruff check .
+      # Metrics, personas, features, candidate generation and the baseline are
+      # all pure. The training run needs a populated catalogue and is not part
+      # of CI.
+      - run: uv run pytest -q
+
   pipeline:
     name: Pipeline
     runs-on: ubuntu-latest
