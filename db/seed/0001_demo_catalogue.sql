@@ -165,32 +165,55 @@ FROM videos v
 ON CONFLICT (video_id) DO NOTHING;
 
 -- --------------------------------------------------------------- people ----
--- Local-only accounts. On Supabase these rows are created by a trigger from
--- auth.users; these exist so comments have authors before auth is provisioned.
-INSERT INTO users (id, handle, display_name) VALUES
-  ('20000000-0000-4000-a000-000000000001', 'demo-priya', 'Priya'),
-  ('20000000-0000-4000-a000-000000000002', 'demo-sam',   'Sam'),
-  ('20000000-0000-4000-a000-000000000003', 'demo-yusuf', 'Yusuf')
-ON CONFLICT (id) DO NOTHING;
+-- Demo accounts, so comments have authors before anyone has signed up.
+--
+-- Skipped entirely on a hosted Supabase project. There, users.id carries a
+-- foreign key to auth.users and rows are created by a trigger when someone
+-- signs up, so inventing three of them here fails with
+--
+--   insert or update on table "users" violates foreign key constraint
+--   "users_id_fkey"
+--
+-- which is the constraint doing its job. The check is on the constraint rather
+-- than on a flag someone has to pass, because the environment already knows
+-- which kind it is and a flag is a thing to forget.
+DO $seed$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'users_id_fkey'
+      AND conrelid = 'public.users'::regclass
+  ) THEN
+    RAISE NOTICE 'Hosted project: skipping demo accounts and their comments. Real accounts come from auth.users.';
+    RETURN;
+  END IF;
 
-INSERT INTO comments (id, video_id, user_id, parent_id, body, created_at) VALUES
-  ('30000000-0000-4000-a000-000000000001', '10000000-0000-4000-a000-000000000001',
-   '20000000-0000-4000-a000-000000000001', NULL,
-   'The section on where the quadratic term stops mattering in practice was worth the whole talk.',
-   now() - interval '6 days'),
-  ('30000000-0000-4000-a000-000000000002', '10000000-0000-4000-a000-000000000001',
-   '20000000-0000-4000-a000-000000000002', '30000000-0000-4000-a000-000000000001',
-   'Agreed — it is the part everyone skips when they summarise this.',
-   now() - interval '5 days'),
-  ('30000000-0000-4000-a000-000000000003', '10000000-0000-4000-a000-000000000001',
-   '20000000-0000-4000-a000-000000000003', NULL,
-   'Does the batching argument still hold with paged attention? Curious how much of this changes.',
-   now() - interval '3 days'),
-  ('30000000-0000-4000-a000-000000000004', '10000000-0000-4000-a000-000000000003',
-   '20000000-0000-4000-a000-000000000002', NULL,
-   'The roofline walkthrough is the clearest explanation of this I have found.',
-   now() - interval '11 days')
-ON CONFLICT (id) DO NOTHING;
+  INSERT INTO users (id, handle, display_name) VALUES
+    ('20000000-0000-4000-a000-000000000001', 'demo-priya', 'Priya'),
+    ('20000000-0000-4000-a000-000000000002', 'demo-sam',   'Sam'),
+    ('20000000-0000-4000-a000-000000000003', 'demo-yusuf', 'Yusuf')
+  ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO comments (id, video_id, user_id, parent_id, body, created_at) VALUES
+    ('30000000-0000-4000-a000-000000000001', '10000000-0000-4000-a000-000000000001',
+     '20000000-0000-4000-a000-000000000001', NULL,
+     'The section on where the quadratic term stops mattering in practice was worth the whole talk.',
+     now() - interval '6 days'),
+    ('30000000-0000-4000-a000-000000000002', '10000000-0000-4000-a000-000000000001',
+     '20000000-0000-4000-a000-000000000002', '30000000-0000-4000-a000-000000000001',
+     'Agreed — it is the part everyone skips when they summarise this.',
+     now() - interval '5 days'),
+    ('30000000-0000-4000-a000-000000000003', '10000000-0000-4000-a000-000000000001',
+     '20000000-0000-4000-a000-000000000003', NULL,
+     'Does the batching argument still hold with paged attention? Curious how much of this changes.',
+     now() - interval '3 days'),
+    ('30000000-0000-4000-a000-000000000004', '10000000-0000-4000-a000-000000000003',
+     '20000000-0000-4000-a000-000000000002', NULL,
+     'The roofline walkthrough is the clearest explanation of this I have found.',
+     now() - interval '11 days')
+  ON CONFLICT (id) DO NOTHING;
+END;
+$seed$;
 
 UPDATE video_stats s
 SET comment_count = (SELECT count(*) FROM comments c WHERE c.video_id = s.video_id);
