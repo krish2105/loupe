@@ -1,0 +1,36 @@
+[project]
+name = "loupe-pipeline"
+version = "0.1.0"
+description = "Loupe pipeline worker — transcription, chunking, embedding, chapter detection"
+requires-python = ">=3.11"
+dependencies = [
+    "asyncpg>=0.30",
+    "pydantic-settings>=2.6",
+]
+
+# Deliberately not runtime dependencies. WhisperX and sentence-transformers
+# pull in torch, which is a gigabyte of wheels. §10.3 runs the backfill on free
+# GPU compute and loads a portable artifact into the database, so the machine
+# running the worker usually needs neither.
+[project.optional-dependencies]
+models = [
+    "whisperx>=3.1",
+    "sentence-transformers>=3.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.8",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

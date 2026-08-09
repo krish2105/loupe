@@ -82,6 +82,39 @@ jobs:
       - run: uv run ruff check .
       - run: uv run pytest -q
 
+  pipeline:
+    name: Pipeline
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: loupe_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/loupe_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: ./db/migrate.sh
+      - run: uv sync --all-groups
+        working-directory: services/pipeline
+      - run: uv run ruff check .
+        working-directory: services/pipeline
+      # The Phase 5 gate is "the stage machine survives forced failure
+      # injection". These tests inject failures at every stage against a real
+      # database rather than mocking the machine, so they need one.
+      - run: uv run pytest -q
+        working-directory: services/pipeline
+
   ingest:
     name: Ingest
     runs-on: ubuntu-latest

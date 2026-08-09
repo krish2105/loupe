@@ -6,7 +6,7 @@ Search *inside* a talk, ask it questions and get answers that cite the exact
 moment, and land on that moment with one click. Built on an owned catalogue,
 because transcripts are what every interesting feature here depends on.
 
-> **Status: Phase 4 of 11.** The catalogue is browsable, talks play adaptively,
+> **Status: Phase 5 of 11.** The catalogue is browsable, talks play adaptively,
 > comments work, and the four identity surfaces are live. Keyword search works;
 > the semantic layer this project exists for — searching *inside* talks,
 > ask-video, chapters — is Phase 6 and does not exist yet. See
@@ -43,6 +43,7 @@ constraints reject it. See [`db/tests/constraints.sql`](db/tests/constraints.sql
 | Database schema | All §6 entities, 7 migrations, 19 constraint assertions passing |
 | Catalogue | 3,000+ referenced talks across 30 channels, 9 owned |
 | Ingest worker | Nightly sync, quota ledger, fails closed, idempotent |
+| Pipeline | Stage machine, normalise, chunk, embed, chapter detection |
 | Design system | Six tokens, two independently designed themes, visible at `/system` |
 | Player | Adaptive HLS, chapter-segmented scrubber, §9.1 keyboard, resume |
 | Player abstraction | Seek/play/pause/time store, verified against a real stream |
@@ -53,7 +54,7 @@ constraints reject it. See [`db/tests/constraints.sql`](db/tests/constraints.sql
 | CI | Web, API, media, and schema jobs |
 | Staging deploy | Live at [web-jade-two-b023n56l0y.vercel.app](https://web-jade-two-b023n56l0y.vercel.app) |
 
-Test counts: 22 web, 54 API, 12 media, 19 ingest, 19 schema assertions.
+Test counts: 22 web, 54 API, 12 media, 19 ingest, 49 pipeline, 19 schema assertions.
 
 Seed a browsable catalogue locally with:
 
@@ -88,6 +89,7 @@ web/              Next.js app — all UI, routing, session
 services/api/     FastAPI core API — CRUD, feed assembly, search orchestration
 services/media/   Upload signing, provider webhooks, playback URL signing
 services/ingest/  Nightly referenced-content sync, quota accounting
+services/pipeline/ Transcription, chunking, embedding, chapter detection
 db/               SQL migrations, constraint tests, migration runner
 docs/             Plan, decisions, ADRs, design direction
 ```
@@ -180,6 +182,18 @@ Recorded as they are incurred, per the working agreement.
   titles, descriptions, and channel names — which is all Class B content can
   ever support. Searching *inside* transcripts is Phase 6, and the results page
   says so rather than implying otherwise.
+- **Transcripts are generated, not transcribed.** The owned talks point at a
+  test stream with no speech in it, so the pipeline runs a fixture transcriber.
+  Every row it produced is stored with `engine = 'fixture'` and is identifiable
+  with one query. The stage machine, chunker, normaliser, drift detection, and
+  chapter assembly are all real and tested; only the audio is not.
+- **Embeddings are lexical, not learned.** Without `sentence-transformers`
+  installed the worker falls back to a hashing vectoriser, labelled
+  `hashing-v1`. It is a real technique — related texts do land closer — but it
+  has no idea that "GPU" and "accelerator" are related. Rows are versioned so
+  they can be selectively re-indexed once bge-m3 runs.
+- **6.2 hours indexed, not 50.** The Phase 5 gate asks for 50; reaching it
+  needs real audio and the GPU backfill §10.3 describes.
 - **The referenced catalogue is generated, not ingested.** No YouTube Data API
   key is configured, so the worker runs against a deterministic fixture
   provider. The worker, the quota ledger, the idempotency, and the write path
