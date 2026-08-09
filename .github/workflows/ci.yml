@@ -82,6 +82,68 @@ jobs:
       - run: uv run ruff check .
       - run: uv run pytest -q
 
+  ingest:
+    name: Ingest
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: loupe_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/loupe_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: ./db/migrate.sh
+      - run: uv sync --all-groups
+        working-directory: services/ingest
+      - run: uv run ruff check .
+        working-directory: services/ingest
+      - run: uv run pytest -q
+        working-directory: services/ingest
+
+      # The Phase 4 gate is a number, so CI asserts the number rather than
+      # trusting that a run which exited zero did anything.
+      - name: Sync reaches the Phase 4 gate
+        working-directory: services/ingest
+        run: uv run python -m app.run
+      - name: 1,500+ Class B videos are in the index
+        run: |
+          count=$(psql "$DATABASE_URL" -t -A -c \
+            "SELECT count(*) FROM videos WHERE source_class='referenced'")
+          echo "referenced videos: $count"
+          [ "$count" -ge 1500 ] || { echo "below the Phase 4 gate"; exit 1; }
+
+      # §5: idempotent, safe to re-run at any time. A second run must insert
+      # nothing — otherwise a retried cron job silently duplicates the catalogue.
+      - name: Re-running inserts nothing
+        working-directory: services/ingest
+        run: |
+          before=$(psql "$DATABASE_URL" -t -A -c "SELECT count(*) FROM videos")
+          uv run python -m app.run
+          after=$(psql "$DATABASE_URL" -t -A -c "SELECT count(*) FROM videos")
+          echo "before=$before after=$after"
+          [ "$before" = "$after" ] || { echo "sync is not idempotent"; exit 1; }
+
+      # §4.2 rule 2: consumption is logged per run, so there is something to
+      # check. An empty ledger after two runs means the accounting is not wired.
+      - name: The quota ledger recorded the spend
+        run: |
+          units=$(psql "$DATABASE_URL" -t -A -c \
+            "SELECT COALESCE(sum(units_spent),0) FROM ingest_quota_ledger")
+          echo "units spent: $units"
+          [ "$units" -gt 0 ] || { echo "quota ledger is empty"; exit 1; }
+
   schema:
     name: Schema
     runs-on: ubuntu-latest

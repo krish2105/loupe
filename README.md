@@ -6,7 +6,7 @@ Search *inside* a talk, ask it questions and get answers that cite the exact
 moment, and land on that moment with one click. Built on an owned catalogue,
 because transcripts are what every interesting feature here depends on.
 
-> **Status: Phase 3 of 11.** The catalogue is browsable, talks play adaptively,
+> **Status: Phase 4 of 11.** The catalogue is browsable, talks play adaptively,
 > comments work, and the four identity surfaces are live. Keyword search works;
 > the semantic layer this project exists for — searching *inside* talks,
 > ask-video, chapters — is Phase 6 and does not exist yet. See
@@ -41,7 +41,8 @@ constraints reject it. See [`db/tests/constraints.sql`](db/tests/constraints.sql
 | Area | State |
 |---|---|
 | Database schema | All §6 entities, 7 migrations, 19 constraint assertions passing |
-| Catalogue | Home feed, video page, channel page, comments — browsable |
+| Catalogue | 3,000+ referenced talks across 30 channels, 9 owned |
+| Ingest worker | Nightly sync, quota ledger, fails closed, idempotent |
 | Design system | Six tokens, two independently designed themes, visible at `/system` |
 | Player | Adaptive HLS, chapter-segmented scrubber, §9.1 keyboard, resume |
 | Player abstraction | Seek/play/pause/time store, verified against a real stream |
@@ -52,7 +53,7 @@ constraints reject it. See [`db/tests/constraints.sql`](db/tests/constraints.sql
 | CI | Web, API, media, and schema jobs |
 | Staging deploy | Live at [web-jade-two-b023n56l0y.vercel.app](https://web-jade-two-b023n56l0y.vercel.app) |
 
-Test counts: 22 web, 28 API, 12 media, 19 schema assertions.
+Test counts: 22 web, 54 API, 12 media, 19 ingest, 19 schema assertions.
 
 Seed a browsable catalogue locally with:
 
@@ -86,6 +87,7 @@ fill in the Supabase keys to enable sign-in.
 web/              Next.js app — all UI, routing, session
 services/api/     FastAPI core API — CRUD, feed assembly, search orchestration
 services/media/   Upload signing, provider webhooks, playback URL signing
+services/ingest/  Nightly referenced-content sync, quota accounting
 db/               SQL migrations, constraint tests, migration runner
 docs/             Plan, decisions, ADRs, design direction
 ```
@@ -178,6 +180,11 @@ Recorded as they are incurred, per the working agreement.
   titles, descriptions, and channel names — which is all Class B content can
   ever support. Searching *inside* transcripts is Phase 6, and the results page
   says so rather than implying otherwise.
+- **The referenced catalogue is generated, not ingested.** No YouTube Data API
+  key is configured, so the worker runs against a deterministic fixture
+  provider. The worker, the quota ledger, the idempotency, and the write path
+  are all real and tested; only the upstream is not. Set `YOUTUBE_API_KEY` and
+  the same code walks real channels.
 - **Thumbnails are stock photographs, not frames from the talks.** They are
   keyed to the talk id so each talk always shows the same image, but they have
   nothing to do with its content. Real frames arrive when the media provider
