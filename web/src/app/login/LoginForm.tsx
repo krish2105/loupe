@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { SUPABASE_KEY_PROBLEM, isSupabaseConfigured } from "@/lib/supabase/config";
 import { Wordmark } from "@/components/shell/Wordmark";
 import { cn } from "@/lib/utils";
 
@@ -43,7 +43,11 @@ export function LoginForm() {
     const supabase = createClient();
     if (!supabase) {
       setError(
-        "Sign-in is not connected yet. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY) to .env.local, then restart the dev server.",
+        // A wrong key and a missing one are different problems with different
+        // fixes, and one of them is urgent. Supabase answers both with
+        // "Invalid API key", which distinguishes nothing.
+        SUPABASE_KEY_PROBLEM ??
+          "Sign-in is not connected yet. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY), then rebuild.",
       );
       return;
     }

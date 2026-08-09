@@ -127,7 +127,7 @@ either way; only the upstream differs.
 
 | Secret | Where to find it |
 |---|---|
-| `SUPABASE_JWT_SECRET` | Supabase → **Project Settings → API → JWT Settings → JWT Secret** |
+| `SUPABASE_JWT_SECRET` | Supabase → **JWT Keys → Legacy JWT Secret**. Render only, on `loupe-api`. **Never in a `NEXT_PUBLIC_` variable** — it signs every access token, so publishing it lets anyone mint a token for any account |
 | `NEXT_PUBLIC_SUPABASE_URL` | Same page, **Project URL** |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Same page. Newer projects show `sb_publishable_…`; older ones call it **anon public** and `NEXT_PUBLIC_SUPABASE_ANON_KEY` works too. Safe in the browser. The **secret** key beside it — `sb_secret_…` or `service_role` — is not, and this project never uses one |
 | `CORS_ORIGINS` | Your Vercel URL, exact, with scheme and no trailing slash |
