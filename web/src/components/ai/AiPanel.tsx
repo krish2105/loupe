@@ -1,4 +1,7 @@
+import { AskThread } from "./AskThread";
+import { SummaryBlock } from "./SummaryBlock";
 import { MarkNode } from "@/components/mark/Mark";
+import { getSummary } from "@/lib/ai";
 import type { VideoDetail } from "@/lib/catalogue";
 import { cn } from "@/lib/utils";
 
@@ -42,7 +45,7 @@ function Panel({
   );
 }
 
-export function AiPanel({ video }: { video: VideoDetail }) {
+export async function AiPanel({ video }: { video: VideoDetail }) {
   // Class B. The asymmetry is architectural, not a bug, and §4.2 rule 3 is
   // explicit that closing it by unofficial means is both a licensing risk and
   // worse engineering. So the panel says what is true and why.
@@ -78,18 +81,35 @@ export function AiPanel({ video }: { video: VideoDetail }) {
     );
   }
 
+  // Class A, indexed. The summary is cached permanently (§11), so this is a
+  // read on every request after the first.
+  const summary = await getSummary(video.id);
+
   return (
-    <Panel
-      title={
-        <>
-          <MarkNode /> Ask this talk
-        </>
-      }
-    >
-      <p className="text-pretty text-(length:--step--1) text-muted">
-        No summary has been generated for this talk yet. When one exists it
-        appears here with key points you can click to jump to.
-      </p>
-    </Panel>
+    <div className="space-y-4">
+      <Panel
+        title={
+          <>
+            <MarkNode /> About this talk
+          </>
+        }
+      >
+        {summary?.available ? (
+          <SummaryBlock tldr={summary.tldr} keyPoints={summary.key_points} />
+        ) : (
+          // §11: hide the block rather than showing a partial summary. The
+          // panel stays, because asking still works without one.
+          <p className="text-pretty text-(length:--step--1) text-muted">
+            {summary === null
+              ? "The summary service is not reachable from here."
+              : "There is not enough indexed content to summarise this talk yet."}
+          </p>
+        )}
+      </Panel>
+
+      <Panel title="Ask this talk">
+        <AskThread videoId={video.id} />
+      </Panel>
+    </div>
   );
 }

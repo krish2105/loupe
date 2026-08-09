@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, HTTPException, Response
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from . import db
@@ -39,6 +40,17 @@ app = FastAPI(
     title="Loupe core API",
     version="0.1.0",
     lifespan=lifespan,
+)
+
+# Without this every browser call fails preflight. The web app is a different
+# origin from every service by construction, so this is not an edge case — it
+# is the only way the client ever talks to them.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(catalogue.router)

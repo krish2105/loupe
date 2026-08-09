@@ -24,7 +24,7 @@ import { PlayerStore, type PlayerSnapshot, type MediaLike } from "./player-store
 
 type PlayerControls = Pick<
   PlayerStore,
-  "seek" | "play" | "pause" | "toggle" | "nudge" | "attach"
+  "seek" | "play" | "pause" | "toggle" | "nudge" | "attach" | "setMarks"
 >;
 
 const PlayerContext = createContext<PlayerStore | null>(null);
@@ -68,6 +68,7 @@ export function usePlayerControls(): PlayerControls {
       toggle: store.toggle,
       nudge: store.nudge,
       attach: store.attach,
+      setMarks: store.setMarks,
     }),
     [store],
   );

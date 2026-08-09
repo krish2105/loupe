@@ -21,14 +21,14 @@ export type Chapter = { startSec: number; endSec: number; title: string };
 
 type Props = {
   chapters?: Chapter[];
-  /** Cited timestamps, in seconds. */
-  marks?: number[];
   className?: string;
 };
 
-export function Scrubber({ chapters = [], marks = [], className }: Props) {
+export function Scrubber({ chapters = [], className }: Props) {
   const { seek } = usePlayerControls();
-  const { currentTime, duration } = usePlayerState();
+  // Marks come from the store, not a prop: the answer and the timeline must
+  // read the same value or they drift apart (§7.4).
+  const { currentTime, duration, marks } = usePlayerState();
   const trackRef = useRef<HTMLDivElement>(null);
 
   if (duration <= 0) {

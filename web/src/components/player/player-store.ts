@@ -30,6 +30,15 @@ export type PlayerSnapshot = {
   isPlaying: boolean;
   /** True once metadata has loaded and a seek will land where it is asked to. */
   isReady: boolean;
+  /**
+   * Cited timestamps, in seconds.
+   *
+   * They live here rather than in the AI panel because the scrubber and the
+   * answer have to agree — §7.4's citation-seek is "one object, two places",
+   * and two components each holding their own copy is how the tick on the
+   * timeline and the mark in the sentence quietly stop matching.
+   */
+  marks: number[];
 };
 
 const EMPTY: PlayerSnapshot = {
@@ -37,6 +46,7 @@ const EMPTY: PlayerSnapshot = {
   duration: 0,
   isPlaying: false,
   isReady: false,
+  marks: [],
 };
 
 /** HTMLMediaElement.HAVE_METADATA. Below this, currentTime writes do not stick. */
@@ -152,6 +162,22 @@ export class PlayerStore {
     this.seek(this.snapshot.currentTime + deltaSeconds);
   };
 
+  /** Replace the cited timestamps shown on the scrubber. */
+  setMarks = (marks: number[]): void => {
+    const next = [...marks].sort((a, b) => a - b);
+    const current = this.snapshot.marks;
+
+    if (
+      next.length === current.length &&
+      next.every((value, index) => value === current[index])
+    ) {
+      return;
+    }
+
+    this.snapshot = { ...this.snapshot, marks: next };
+    for (const listener of this.listeners) listener();
+  };
+
   private clampToDuration(seconds: number): number {
     const { duration } = this.media ?? {};
     if (typeof duration !== "number" || !Number.isFinite(duration) || duration <= 0) {
@@ -175,7 +201,7 @@ export class PlayerStore {
   private sync() {
     const media = this.media;
     if (!media) {
-      this.publish(EMPTY);
+      this.publish({ ...EMPTY, marks: this.snapshot.marks });
       return;
     }
 
@@ -187,6 +213,8 @@ export class PlayerStore {
       duration: Number.isFinite(media.duration) ? media.duration : 0,
       isPlaying: !media.paused,
       isReady,
+      // Carried forward: a timeupdate must not wipe the citations.
+      marks: this.snapshot.marks,
     });
   }
 
@@ -201,7 +229,8 @@ export class PlayerStore {
       prev.currentTime === next.currentTime &&
       prev.duration === next.duration &&
       prev.isPlaying === next.isPlaying &&
-      prev.isReady === next.isReady
+      prev.isReady === next.isReady &&
+      prev.marks === next.marks
     ) {
       return;
     }

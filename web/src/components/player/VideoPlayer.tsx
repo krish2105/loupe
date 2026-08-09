@@ -22,7 +22,6 @@ export function VideoPlayer({
   poster,
   title,
   chapters,
-  marks,
   resumeAtSec,
   videoId = null,
 }: {
@@ -30,7 +29,6 @@ export function VideoPlayer({
   poster?: string;
   title: string;
   chapters?: Chapter[];
-  marks?: number[];
   /** A prior position, if one is worth offering. Computed server-side. */
   resumeAtSec?: number;
   /** Omit for content with no history to keep — the demo route, or a preview. */
@@ -173,7 +171,6 @@ export function VideoPlayer({
 
       <PlayerControls
         chapters={chapters}
-        marks={marks}
         level={level}
         onFullscreen={toggleFullscreen}
       />

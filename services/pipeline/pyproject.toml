@@ -13,10 +13,11 @@ dependencies = [
 # GPU compute and loads a portable artifact into the database, so the machine
 # running the worker usually needs neither.
 [project.optional-dependencies]
-models = [
-    "whisperx>=3.1",
-    "sentence-transformers>=3.0",
-]
+# Split, because they have very different weights and are needed at different
+# times. Embeddings are needed wherever chunks are indexed; ASR is only needed
+# on the machine doing the §10.3 backfill, which is a GPU box, not this one.
+embeddings = ["sentence-transformers>=3.0"]
+asr = ["whisperx>=3.1"]
 
 [dependency-groups]
 dev = [

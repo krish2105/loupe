@@ -177,3 +177,27 @@ class TestComments:
 
         detail = await client.get(f"/v1/videos/{seeded['video_id']}")
         assert detail.json()["comment_count"] == 1
+
+
+class TestCors:
+    """
+    Regression: the API shipped without CORS, so every browser-side call —
+    posting a comment, liking, saving, subscribing, writing progress — failed
+    preflight. All of them had passing server-side tests, which is exactly why
+    this assertion exists.
+    """
+
+    async def test_a_preflight_is_answered(self, client):
+        response = await client.options(
+            "/v1/watch-events",
+            headers={
+                "Origin": "http://localhost:3000",
+                "Access-Control-Request-Method": "POST",
+            },
+        )
+
+        assert response.status_code == 200
+        assert (
+            response.headers.get("access-control-allow-origin")
+            == "http://localhost:3000"
+        )

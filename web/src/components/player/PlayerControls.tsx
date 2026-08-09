@@ -35,12 +35,10 @@ function ControlButton({
 
 export function PlayerControls({
   chapters,
-  marks,
   level,
   onFullscreen,
 }: {
   chapters?: Chapter[];
-  marks?: number[];
   /** Current rendition, e.g. "720p". Proof that ABR is doing something. */
   level?: string | null;
   onFullscreen: () => void;
@@ -56,7 +54,7 @@ export function PlayerControls({
         "backdrop-blur-[2px]",
       )}
     >
-      <Scrubber chapters={chapters} marks={marks} />
+      <Scrubber chapters={chapters} />
 
       <div className="mt-1 flex items-center gap-2">
         <ControlButton label={isPlaying ? "Pause" : "Play"} onClick={toggle}>

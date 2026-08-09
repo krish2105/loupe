@@ -82,6 +82,24 @@ jobs:
       - run: uv run ruff check .
       - run: uv run pytest -q
 
+  ai:
+    name: AI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/ai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      # Without the embeddings extra, so CI does not pull a gigabyte of torch.
+      # Retrieval, refusal, citation selection and summarising are all pure and
+      # need no model.
+      - run: uv sync --all-groups
+      - run: uv run ruff check .
+      - run: uv run pytest -q
+
   pipeline:
     name: Pipeline
     runs-on: ubuntu-latest

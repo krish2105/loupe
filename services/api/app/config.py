@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     database_url: str = "postgres://localhost:5432/loupe_dev"
     environment: str = "local"
 
+    #: Browsers refuse cross-origin requests without this, and the web app is
+    #: always a different origin from the services. Comma-separated.
+    cors_origins: str = "http://localhost:3000"
+
     # Supabase signs access tokens with this. Verifying locally avoids a network
     # round-trip on every history write, which happens every ten seconds of
     # playback per viewer.
