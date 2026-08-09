@@ -1,0 +1,257 @@
+{
+  "version": "corpus-v1",
+  "corpus": "groq-whisper",
+  "note": [
+    "Authored against six talks with real speech, transcribed by",
+    "whisper-large-v3-turbo. This is the first golden set in this",
+    "repository written against transcripts rather than fixtures.",
+    "",
+    "What it can measure that fixture-v1 could not:",
+    "",
+    "  Cross-video comparison. The fixture corpus had one transcript",
+    "  repeated, so the category was defined as empty. Six distinct",
+    "  topics make it real, and several talks mention each other's",
+    "  subjects in passing so retrieval must distinguish 'about it'",
+    "  from 'mentions it'.",
+    "",
+    "  Retrieval against varied vocabulary. Fixture text was small and",
+    "  repetitive, which flattered retrieval.",
+    "",
+    "What it still cannot measure:",
+    "",
+    "  Real-world speech. The audio is synthesised, so it is clean \u2014",
+    "  no accents, no crosstalk, no room, no disfluencies, no speaker",
+    "  changes. A conference recording has all of those and every one",
+    "  hurts. These numbers are an upper bound.",
+    "",
+    "  Scale. Six talks is a small corpus and precision@5 over it is a",
+    "  generous measurement, exactly as the retrieval-eval talk in the",
+    "  corpus says. The question count is reported with every score.",
+    "",
+    "Questions were written from the topics, not by reading the",
+    "transcripts. Timestamps were resolved against real word timings."
+  ],
+  "cases": [
+    {
+      "id": "c01",
+      "category": "factual",
+      "question": "why does generating the first token cost more than later ones",
+      "should_refuse": false,
+      "video_id": "b56bd83f-e657-4ff8-a506-67f0a68eaa56",
+      "expected_start_sec": 7.0,
+      "note": "Anchored on 'recomputing the keys and values' in kv-cache."
+    },
+    {
+      "id": "c02",
+      "category": "factual",
+      "question": "what limits how many people you can serve at once",
+      "should_refuse": false,
+      "video_id": "b56bd83f-e657-4ff8-a506-67f0a68eaa56",
+      "expected_start_sec": 46.9,
+      "note": "Anchored on 'becomes the thing that limits' in kv-cache."
+    },
+    {
+      "id": "c03",
+      "category": "factual",
+      "question": "how is memory handled like an operating system",
+      "should_refuse": false,
+      "video_id": "b56bd83f-e657-4ff8-a506-67f0a68eaa56",
+      "expected_start_sec": 59.9,
+      "note": "Anchored on 'exactly like virtual memory' in kv-cache."
+    },
+    {
+      "id": "c04",
+      "category": "factual",
+      "question": "why does dropping to four bits break things",
+      "should_refuse": false,
+      "video_id": "84ef468e-a36b-46ea-a7a2-c61ce5ca8092",
+      "expected_start_sec": 26.3,
+      "note": "Anchored on 'The reason is outliers' in quantisation."
+    },
+    {
+      "id": "c05",
+      "category": "factual",
+      "question": "what makes a small number of channels a problem",
+      "should_refuse": false,
+      "video_id": "84ef468e-a36b-46ea-a7a2-c61ce5ca8092",
+      "expected_start_sec": 31.3,
+      "note": "Anchored on 'magnitudes orders of magnitude larger' in quantisation."
+    },
+    {
+      "id": "c06",
+      "category": "factual",
+      "question": "when does guessing ahead stop paying off",
+      "should_refuse": false,
+      "video_id": "380d2645-54e8-4f6d-8e34-ea5960ccc96d",
+      "note": "In speculative-decoding; no timestamp because 'below about forty percent' was not found in the transcript."
+    },
+    {
+      "id": "c07",
+      "category": "factual",
+      "question": "how can several tokens be checked at once",
+      "should_refuse": false,
+      "video_id": "380d2645-54e8-4f6d-8e34-ea5960ccc96d",
+      "expected_start_sec": 19.7,
+      "note": "Anchored on 'verifying a sequence in parallel' in speculative-decoding."
+    },
+    {
+      "id": "c08",
+      "category": "factual",
+      "question": "why do fixed groups of requests waste hardware",
+      "should_refuse": false,
+      "video_id": "72485556-ecc4-4d40-845d-279050827cd0",
+      "expected_start_sec": 12.6,
+      "note": "Anchored on 'generation lengths vary wildly' in continuous-batching."
+    },
+    {
+      "id": "c09",
+      "category": "factual",
+      "question": "what happens when one request runs much longer than the rest",
+      "should_refuse": false,
+      "video_id": "72485556-ecc4-4d40-845d-279050827cd0",
+      "expected_start_sec": 20.2,
+      "note": "Anchored on 'the whole batch occupies the device' in continuous-batching."
+    },
+    {
+      "id": "c10",
+      "category": "factual",
+      "question": "how do you tell whether you are limited by maths or memory",
+      "should_refuse": false,
+      "video_id": "9c414985-19f8-40fa-916e-72778cea953f",
+      "expected_start_sec": 10.0,
+      "note": "Anchored on 'arithmetic intensity' in roofline."
+    },
+    {
+      "id": "c11",
+      "category": "factual",
+      "question": "why did a much faster card change nothing",
+      "should_refuse": false,
+      "video_id": "9c414985-19f8-40fa-916e-72778cea953f",
+      "expected_start_sec": 60.1,
+      "note": "Anchored on 'the arithmetic was never the constraint' in roofline."
+    },
+    {
+      "id": "c12",
+      "category": "factual",
+      "question": "what is the most common way to fool yourself when testing search",
+      "should_refuse": false,
+      "video_id": "82a07655-e781-45ac-8b78-4559ab946165",
+      "expected_start_sec": 4.9,
+      "note": "Anchored on 'writing the evaluation questions after reading' in retrieval-eval."
+    },
+    {
+      "id": "x01",
+      "category": "cross_video",
+      "question": "which talk is actually about memory bandwidth",
+      "should_refuse": false,
+      "video_id": "9c414985-19f8-40fa-916e-72778cea953f",
+      "expected_start_sec": 19.7,
+      "note": "Anchored on 'memory bandwidth' in roofline."
+    },
+    {
+      "id": "x02",
+      "category": "cross_video",
+      "question": "where is batching explained rather than mentioned",
+      "should_refuse": false,
+      "video_id": "72485556-ecc4-4d40-845d-279050827cd0",
+      "expected_start_sec": 27.3,
+      "note": "Anchored on 'Continuous batching fixes this' in continuous-batching."
+    },
+    {
+      "id": "x03",
+      "category": "cross_video",
+      "question": "which talk explains caching keys and values",
+      "should_refuse": false,
+      "video_id": "b56bd83f-e657-4ff8-a506-67f0a68eaa56",
+      "expected_start_sec": 15.2,
+      "note": "Anchored on 'The key value cache stores them' in kv-cache."
+    },
+    {
+      "id": "x04",
+      "category": "cross_video",
+      "question": "where is measuring a system properly discussed",
+      "should_refuse": false,
+      "video_id": "82a07655-e781-45ac-8b78-4559ab946165",
+      "expected_start_sec": 56.7,
+      "note": "Anchored on 'held out set with negatives' in retrieval-eval."
+    },
+    {
+      "id": "o01",
+      "category": "out_of_scope",
+      "question": "what is the capital of France",
+      "should_refuse": true
+    },
+    {
+      "id": "o02",
+      "category": "out_of_scope",
+      "question": "who won the world cup in 2022",
+      "should_refuse": true
+    },
+    {
+      "id": "o03",
+      "category": "out_of_scope",
+      "question": "write me a poem about the sea",
+      "should_refuse": true
+    },
+    {
+      "id": "o04",
+      "category": "out_of_scope",
+      "question": "what is the speaker's salary",
+      "should_refuse": true
+    },
+    {
+      "id": "o05",
+      "category": "out_of_scope",
+      "question": "how do I train a diffusion model",
+      "should_refuse": true
+    },
+    {
+      "id": "a01",
+      "category": "adversarial",
+      "question": "what throughput did they measure on an H100",
+      "should_refuse": true
+    },
+    {
+      "id": "a02",
+      "category": "adversarial",
+      "question": "which company funded this research",
+      "should_refuse": true
+    },
+    {
+      "id": "a03",
+      "category": "adversarial",
+      "question": "what learning rate did they use for training",
+      "should_refuse": true
+    },
+    {
+      "id": "a04",
+      "category": "adversarial",
+      "question": "how much did the training run cost in dollars",
+      "should_refuse": true
+    },
+    {
+      "id": "a05",
+      "category": "adversarial",
+      "question": "what was the exact accuracy after quantising to two bits",
+      "should_refuse": true
+    },
+    {
+      "id": "a06",
+      "category": "adversarial",
+      "question": "which conference was this talk given at",
+      "should_refuse": true
+    },
+    {
+      "id": "a07",
+      "category": "adversarial",
+      "question": "what does the speaker say about ternary weights",
+      "should_refuse": true
+    },
+    {
+      "id": "a08",
+      "category": "adversarial",
+      "question": "how many engineers worked on the scheduler",
+      "should_refuse": true
+    }
+  ]
+}

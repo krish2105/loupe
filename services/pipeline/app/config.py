@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     #: Where the media service lives, and the shared secret it expects. The
     #: transcoder holds no bucket credentials of its own — it asks the media
     #: service to sign each URL, which is what keeps §5's "sole holder" true.
+    #: whisper-large-v3-turbo, hosted. Preferred over WhisperX because
+    #: WhisperX pulls torch — about a gigabyte — onto a machine whose whole
+    #: point is that it costs nothing.
+    groq_api_key: str = ""
+
     media_service_url: str = "http://localhost:8002"
     internal_token: str = ""
 

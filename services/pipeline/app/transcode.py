@@ -109,6 +109,28 @@ async def encode_rung(source: Path, out: Path, rung: Rung) -> None:
     )
 
 
+async def extract_audio(source: Path, destination: Path) -> None:
+    """
+    Speech-model audio: 16 kHz, mono, uncompressed.
+
+    Every speech model resamples to 16 kHz internally, so sending anything
+    richer uploads bytes that are discarded on arrival. Mono for the same
+    reason — a talk is one speaker and a stereo channel doubles the file to
+    carry a duplicate.
+
+    The size difference is the point: a 20 MB source becomes a few hundred
+    kilobytes per minute, which is what keeps a two-hour talk inside a hosted
+    API's upload limit.
+    """
+    await _run(
+        "ffmpeg", "-v", "error", "-y",
+        "-i", str(source),
+        "-vn", "-ac", "1", "-ar", "16000",
+        "-c:a", "pcm_s16le",
+        str(destination),
+    )
+
+
 def master_playlist(rungs: list[Rung], widths: dict[int, int]) -> str:
     """
     The master playlist, best last.

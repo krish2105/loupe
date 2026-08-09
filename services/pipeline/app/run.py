@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 import asyncpg
 
 from . import worker
-from .asr import FixtureTranscriber, WhisperXTranscriber
+from .asr import FixtureTranscriber, GroqTranscriber, WhisperXTranscriber
 from .budget import BudgetExhausted, ensure_budget, reserve
 from .config import settings
 from .embed import build_embedder
@@ -76,6 +76,20 @@ logger = logging.getLogger("pipeline")
 
 
 def build_transcriber():
+    """
+    The best real transcriber available, or the fixture with a warning.
+
+    Groq first. It satisfies §5.2's hard requirement — word-level timestamps —
+    without WhisperX's gigabyte of torch wheels, and the free tier transcribes
+    more than this catalogue will hold. WhisperX stays as the local option for
+    anything that must not leave the machine.
+    """
+    if settings.groq_api_key:
+        try:
+            return GroqTranscriber(settings.groq_api_key)
+        except RuntimeError as error:
+            logger.warning("%s", error)
+
     if settings.use_real_models:
         try:
             return WhisperXTranscriber()

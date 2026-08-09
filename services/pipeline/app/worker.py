@@ -92,7 +92,7 @@ async def transcode_video(pool, video_id) -> None:
 async def transcribe(pool, video_id, transcriber: Transcriber) -> None:
     row = await pool.fetchrow(
         """
-        SELECT v.duration_sec, a.hls_url
+        SELECT v.duration_sec, a.hls_url, a.provider, a.provider_guid
         FROM videos v LEFT JOIN video_assets a ON a.video_id = v.id
         WHERE v.id = $1
         """,
@@ -101,7 +101,24 @@ async def transcribe(pool, video_id, transcriber: Transcriber) -> None:
     if row is None or not row["hls_url"]:
         raise RuntimeError("no playable asset to transcribe")
 
-    words = transcriber.transcribe(row["hls_url"], row["duration_sec"] or 0)
+    if row["provider"] == "s3":
+        # Real transcribers need audio, not a manifest key. The source is
+        # downmixed to 16 kHz mono first because that is what speech models
+        # consume and it shrinks a talk by an order of magnitude — the
+        # difference between fitting a hosted API's upload limit and not.
+        with transcode.workspace() as directory:
+            workspace = Path(directory)
+            source = workspace / "source"
+            audio = workspace / "audio.wav"
+
+            await media_store.download(
+                f"videos/{row['provider_guid']}/source/original", source
+            )
+            await transcode.extract_audio(source, audio)
+            words = transcriber.transcribe(str(audio), row["duration_sec"] or 0)
+    else:
+        words = transcriber.transcribe(row["hls_url"], row["duration_sec"] or 0)
+
     if not words:
         raise RuntimeError("transcription produced no words")
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from pathlib import Path
 from typing import Protocol
 
 from .chunk import Word
@@ -132,6 +133,99 @@ class FixtureTranscriber:
             clock += 1.6 + ((seed + section_index) % 5) * 0.1
 
         return words
+
+
+class GroqTranscriber:
+    """
+    whisper-large-v3-turbo, hosted.
+
+    §5.2 rejected plain Whisper because it does not give clean word timing, and
+    §11.1 makes the whole intelligence layer rest on a citation landing on the
+    right moment. Groq's API returns word-level timestamps when asked for them,
+    which is the property that was actually missing — verified against the live
+    endpoint before this was written rather than assumed from the docs.
+
+    Chosen over running WhisperX locally because WhisperX pulls torch, about a
+    gigabyte of wheels, onto a machine whose whole point is that it costs
+    nothing. The free tier transcribes far more than this catalogue will hold.
+
+    The trade is that audio leaves the machine. For a public catalogue of
+    conference talks that is not a meaningful disclosure; it would be for
+    anything private, and that is the line at which WhisperX earns its
+    gigabyte back.
+    """
+
+    engine = "groq-whisper"
+    engine_version = "whisper-large-v3-turbo"
+
+    #: The free tier's ceiling. Larger files need splitting, which is real work
+    #: and not needed until a talk runs past roughly three hours at 16 kHz mono.
+    MAX_BYTES = 25 * 1024 * 1024
+
+    def __init__(self, api_key: str) -> None:
+        if not api_key:
+            raise RuntimeError(
+                "GROQ_API_KEY is not set, so there is no real transcriber. The "
+                "worker falls back to fixtures, which are not transcripts."
+            )
+        self._api_key = api_key
+
+    def transcribe(self, audio_ref: str, duration_sec: int) -> list[Word]:
+        import httpx
+
+        path = Path(audio_ref)
+        if not path.exists():
+            raise RuntimeError(
+                f"expected a local audio file, got {audio_ref!r}. The transcribe "
+                "step downloads and downmixes the source before calling this."
+            )
+
+        size = path.stat().st_size
+        if size > self.MAX_BYTES:
+            raise RuntimeError(
+                f"{size / 1_048_576:.0f} MB exceeds the {self.MAX_BYTES // 1_048_576} MB "
+                "limit. Split the audio, or transcribe this one locally."
+            )
+
+        with path.open("rb") as handle:
+            response = httpx.post(
+                "https://api.groq.com/openai/v1/audio/transcriptions",
+                headers={"Authorization": f"Bearer {self._api_key}"},
+                files={"file": (path.name, handle, "audio/wav")},
+                data={
+                    "model": self.engine_version,
+                    "response_format": "verbose_json",
+                    "timestamp_granularities[]": "word",
+                },
+                timeout=httpx.Timeout(30, read=600),
+            )
+
+        if response.status_code != 200:
+            raise RuntimeError(
+                f"Groq answered {response.status_code}: {response.text[:200]}"
+            )
+
+        payload = response.json()
+        words = payload.get("words") or []
+
+        if not words:
+            # Silence transcribes to nothing, and so does a request that
+            # silently lost its granularity parameter. Both are worth failing
+            # on rather than storing an empty transcript that looks finished.
+            raise RuntimeError(
+                "Groq returned no word timings. Either the audio has no speech, "
+                "or the word granularity was not applied."
+            )
+
+        return [
+            Word(
+                text=word["word"],
+                start=float(word["start"]),
+                end=float(word["end"]),
+                speaker=None,
+            )
+            for word in words
+        ]
 
 
 class WhisperXTranscriber:  # pragma: no cover - requires the model
