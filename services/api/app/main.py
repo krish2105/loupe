@@ -134,7 +134,7 @@ async def record_watch_event(
         # A foreign key violation here means an unknown video or user, which is
         # a client error rather than a server fault.
         if "foreign key" in str(error).lower():
-            raise HTTPException(status_code=404, detail="Unknown video.")
+            raise HTTPException(status_code=404, detail="Unknown video.") from error
         raise
 
     return Response(status_code=204)

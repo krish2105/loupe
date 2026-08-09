@@ -38,9 +38,11 @@ def _decode(token: str) -> dict:
             options={"require": ["exp", "sub"]},
         )
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Session expired. Sign in again.")
+        raise HTTPException(
+            status_code=401, detail="Session expired. Sign in again."
+        ) from None
     except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid session token.")
+        raise HTTPException(status_code=401, detail="Invalid session token.") from None
 
 
 async def require_user_id(authorization: str | None = Header(default=None)) -> UUID:
@@ -52,4 +54,4 @@ async def require_user_id(authorization: str | None = Header(default=None)) -> U
     try:
         return UUID(claims["sub"])
     except (KeyError, ValueError):
-        raise HTTPException(status_code=401, detail="Invalid session token.")
+        raise HTTPException(status_code=401, detail="Invalid session token.") from None

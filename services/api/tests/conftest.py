@@ -78,7 +78,8 @@ async def seeded(client):
         )
         await connection.execute(
             """
-            INSERT INTO videos (id, source_class, channel_id, title, processing_status, duration_sec)
+            INSERT INTO videos
+                (id, source_class, channel_id, title, processing_status, duration_sec)
             VALUES ($1, 'owned', $2, 'A talk', 'indexed', 3600)
             """,
             video_id,
