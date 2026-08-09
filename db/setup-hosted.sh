@@ -2,8 +2,8 @@
 # Prepare a hosted database: extension, schema, auth link, and optionally a
 # catalogue to look at.
 #
-#   ./db/setup-hosted.sh "postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres"
 #   ./db/setup-hosted.sh "<url>" --seed
+#   ./db/setup-hosted.sh "<url with [YOUR-PASSWORD] left in>" --password '<pw>' --seed
 #
 # Four commands with the same long URL repeated in each is four chances to paste
 # it wrong, and the failure when you do is a connection error that looks like a
@@ -14,24 +14,56 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-URL="${1:-}"
-SEED="${2:-}"
+URL=""
+PASSWORD=""
+SEED=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --seed)     SEED="yes"; shift ;;
+    --password) PASSWORD="${2:-}"; shift 2 ;;
+    -h|--help)  URL=""; break ;;
+    *)          URL="$1"; shift ;;
+  esac
+done
 
 if [[ -z "$URL" ]]; then
   cat >&2 <<'USAGE'
-Usage: ./db/setup-hosted.sh "<connection string>" [--seed]
+Usage:
+  ./db/setup-hosted.sh "<connection string>" [--seed]
+  ./db/setup-hosted.sh "<connection string with [YOUR-PASSWORD] left in>" \
+      --password '<the password>' [--seed]
 
-Supabase → Connect → Direct → Transaction pooler → URI, with [YOUR-PASSWORD]
-replaced by the real password. Quote it: passwords contain characters the shell
-would otherwise interpret.
+The second form is easier to get right. Paste the URI exactly as Supabase gives
+it, placeholder and all, and pass the password separately — the script
+substitutes it and percent-encodes it, which is the step that otherwise produces
+an authentication error blaming the username.
+
+Supabase → Connect → Direct → Transaction pooler → URI.
+
+Quote both arguments. Passwords contain characters the shell would interpret.
 USAGE
   exit 2
 fi
 
+if [[ -n "$PASSWORD" ]]; then
+  # Encoded here rather than by hand. A password with @ in it splits the URL at
+  # the wrong place and Postgres reports a username that does not exist, which
+  # sends people looking in entirely the wrong direction.
+  encoded="$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$PASSWORD")"
+  URL="${URL//\[YOUR-PASSWORD\]/$encoded}"
+fi
+
 case "$URL" in
   *"[YOUR-PASSWORD]"*)
-    echo "The password placeholder is still in the URL. Replace [YOUR-PASSWORD]" >&2
-    echo "with the real one, or reset it in Project Settings → Database." >&2
+    cat >&2 <<'PLACEHOLDER'
+The password placeholder is still in the URL. Either replace it yourself, or
+leave it in place and pass the password separately:
+
+  ./db/setup-hosted.sh "<url with [YOUR-PASSWORD]>" --password '<password>'
+
+Reset it under Project Settings → Database if you do not have it.
+PLACEHOLDER
     exit 2
     ;;
 esac
@@ -115,7 +147,7 @@ echo "4/4  linking profiles to auth.users"
 psql_quiet -f "$ROOT/db/migrations/supabase/0001_auth_link.sql" >/dev/null
 echo "     ok"
 
-if [[ "$SEED" == "--seed" ]]; then
+if [[ "$SEED" == "yes" ]]; then
   echo
   echo "seeding a catalogue"
   for file in 0001_demo_catalogue 0002_shorts 0003_audio; do
