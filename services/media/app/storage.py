@@ -23,6 +23,10 @@ from . import s3
 from .config import settings
 
 
+class PlaylistUnavailable(RuntimeError):
+    """The bucket could not supply a playlist, with the reason attached."""
+
+
 def _sign(key: str, ttl: int, method: str = "GET") -> str:
     return s3.presigned_url(
         endpoint=settings.s3_endpoint,
@@ -78,14 +82,29 @@ async def fetch_playlist(video_id: str, path: str) -> str | None:
     Returns None when the object is absent, which the caller turns into a 404 —
     an unwritten playlist and a wrong path are the same thing from here.
     """
-    url = _sign(s3.hls_key(video_id, path), 60)
+    key = s3.hls_key(video_id, path)
+    url = _sign(key, 60)
 
-    async with httpx.AsyncClient(timeout=10) as client:
-        response = await client.get(url)
+    try:
+        # Generous, because a free instance reaching a bucket across regions on
+        # a cold start is slower than anything measured locally.
+        async with httpx.AsyncClient(timeout=httpx.Timeout(20, read=30)) as client:
+            response = await client.get(url)
+    except httpx.HTTPError as error:
+        # Otherwise this is a bare 500 with the cause only in a log nobody is
+        # tailing. A misconfigured endpoint — a stray space from pasting a
+        # value, most likely — looks identical to an outage from outside.
+        raise PlaylistUnavailable(
+            f"could not reach the bucket for {key}: {type(error).__name__}"
+        ) from error
 
     if response.status_code == 404:
         return None
-    response.raise_for_status()
+
+    if response.status_code >= 400:
+        raise PlaylistUnavailable(
+            f"the bucket answered {response.status_code} for {key}"
+        )
 
     # A playlist's URIs are relative to the playlist, not to the video root, so
     # a nested one has to resolve its children against its own directory.

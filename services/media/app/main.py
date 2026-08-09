@@ -318,7 +318,13 @@ async def hls_playlist(video_id: str, path: str) -> Response:
             detail="Only playlists are served here; segments come from the bucket directly.",
         )
 
-    body = await storage.fetch_playlist(video_id, path)
+    try:
+        body = await storage.fetch_playlist(video_id, path)
+    except storage.PlaylistUnavailable as unavailable:
+        # 502, not 500: this service is fine and the thing behind it is not,
+        # and the difference is the first thing anyone debugging needs.
+        raise HTTPException(status_code=502, detail=str(unavailable)) from unavailable
+
     if body is None:
         raise HTTPException(status_code=404, detail="No such playlist.")
 
