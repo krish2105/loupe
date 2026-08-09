@@ -6,11 +6,14 @@ Search *inside* a talk, ask it questions and get answers that cite the exact
 moment, and land on that moment with one click. Built on an owned catalogue,
 because transcripts are what every interesting feature here depends on.
 
-> **Status: Phase 9 of 11.** The catalogue is browsable, talks play adaptively,
-> comments work, and the four identity surfaces are live. Keyword search works;
-> the semantic layer this project exists for — searching *inside* talks,
-> ask-video, chapters — is Phase 6 and does not exist yet. See
-> [gate status](#gate-status).
+> **Status: Phase 10 of 11 — feature complete.** Every phase in the plan is
+> built. Five of eleven gates are met outright, five are partial, and one is
+> not met; each is reported individually below with what is missing. Nothing
+> here is rounded up. See [gate status](#gate-status).
+>
+> The single largest caveat: the corpus is synthetic, so this codebase is
+> verified to be wired correctly and is **not** verified to be good. Those are
+> different claims and the difference is documented everywhere it applies.
 
 ---
 
@@ -36,29 +39,77 @@ The asymmetry is enforced by the database, not by convention. A Class B video
 physically cannot acquire a transcript, an embedding, or a media asset — the
 constraints reject it. See [`db/tests/constraints.sql`](db/tests/constraints.sql).
 
+## How it fits together
+
+```
+                    ┌──────────────────────────────────────┐
+   browser ───────► │  web/   Next.js 16, App Router       │
+                    │         session, all UI, SSR reads   │
+                    └───┬─────────────┬────────────────┬───┘
+                        │             │                │
+              ┌─────────▼───┐  ┌──────▼──────┐  ┌──────▼───────┐
+              │ services/   │  │ services/   │  │ services/    │
+              │ api  :8010  │  │ ai   :8031  │  │ media        │
+              │             │──►             │  │              │
+              │ CRUD, auth, │  │ summarise,  │  │ Bunny signing│
+              │ feed, lists │  │ ask, search,│  │ webhooks     │
+              │             │  │ playlists   │  │              │
+              │ never calls │  │ never sees  │  │ the only     │
+              │ a model     │  │ a user      │  │ holder of a  │
+              └──────┬──────┘  └──────┬──────┘  │ provider key │
+                     │                │         └──────┬───────┘
+                     └────────┬───────┴────────────────┘
+                              │
+                  ┌───────────▼────────────┐        ┌──────────────────┐
+                  │  PostgreSQL 17         │◄───────┤ services/ingest  │
+                  │  + pgvector (HNSW)     │        │ nightly Class B  │
+                  │                        │        │ sync + quota     │
+                  │  videos, chunks,       │        └──────────────────┘
+                  │  watch_events,         │        ┌──────────────────┐
+                  │  chapters, summaries   │◄───────┤ services/pipeline│
+                  └───────────┬────────────┘        │ ASR → chunk →    │
+                              │                     │ embed → chapters │
+                  ┌───────────▼────────────┐        └──────────────────┘
+                  │ services/eval          │
+                  │ services/recsys        │  offline, read the same tables
+                  └────────────────────────┘
+```
+
+The boundaries are load-bearing rather than decorative. When AI playlists needed
+to be saved as playlists owned by a real person, composition stayed in the AI
+service and the write went to the core API, which already knew how to authorise
+one. The AI service still has no concept of a user.
+
+Full reasoning, including what the split costs:
+[`docs/architecture.md`](docs/architecture.md).
+
 ## What is built
 
 | Area | State |
 |---|---|
-| Database schema | All §6 entities, 7 migrations, 19 constraint assertions passing |
-| Catalogue | 3,000+ referenced talks across 30 channels, 9 owned |
+| Database schema | All §6 entities, 10 migrations, 21 constraint assertions passing |
+| Catalogue | 3,048 referenced talks across 37 channels, 17 owned |
 | Ingest worker | Nightly sync, quota ledger, fails closed, idempotent |
 | Pipeline | Stage machine, normalise, chunk, embed, chapter detection |
 | AI layer | Semantic search, ask-video with refusal, summaries with timestamps |
 | Evaluation | Harness, tested metrics, golden set — **no benchmark yet, deliberately** |
 | Shorts | Vertical snap feed, window policy tested — **playback unverified** |
 | Recommendations | Two-stage model, offline eval — **loses to popularity, analysed** |
+| AI playlists | Brief → ordered playlist with a written rationale and per-item start times |
+| Notifications | Trigger fan-out on publish and reply, idempotent, unread badge |
 | Design system | Six tokens, two independently designed themes, visible at `/system` |
 | Player | Adaptive HLS, chapter-segmented scrubber, §9.1 keyboard, resume |
 | Player abstraction | Seek/play/pause/time store, verified against a real stream |
 | Progress + resume | Append-only writes with JWT auth; endpoints tested against Postgres |
 | Media service | Bunny upload signing, webhook, signed playback URLs — **provider calls unverified** |
 | Auth | Supabase Auth wired; **unverified — needs provisioning** |
-| Core API | FastAPI, health, pipeline stages, watch events, resume |
-| CI | Web, API, media, and schema jobs |
+| Core API | FastAPI, health, pipeline dashboard, watch events, resume, collections |
+| CI | Nine jobs: web, API, AI, eval, recsys, media, ingest, pipeline, schema |
 | Staging deploy | Live at [web-jade-two-b023n56l0y.vercel.app](https://web-jade-two-b023n56l0y.vercel.app) |
 
-Test counts: 44 web, 55 API, 31 AI, 40 eval, 43 recsys, 12 media, 19 ingest, 49 pipeline, 21 schema assertions.
+Test counts: 44 web, 76 API, 46 AI, 40 eval, 43 recsys, 12 media, 19 ingest,
+49 pipeline, 21 schema assertions. **349 in total**, all green in CI across nine
+jobs.
 
 Seed a browsable catalogue locally with:
 
@@ -94,12 +145,12 @@ services/api/     FastAPI core API — CRUD, feed assembly, search orchestration
 services/media/   Upload signing, provider webhooks, playback URL signing
 services/ingest/  Nightly referenced-content sync, quota accounting
 services/pipeline/ Transcription, chunking, embedding, chapter detection
-services/ai/      Summarising, ask-video, semantic search — the only service
-                  that holds a model key or contains a prompt
+services/ai/      Summarising, ask-video, semantic search, playlist composition
+                  — the only service that holds a model key or a prompt
 services/eval/    Golden set, metrics, and the evaluation runner
 services/recsys/  Personas, candidate generation, ranking, offline evaluation
 db/               SQL migrations, constraint tests, migration runner
-docs/             Plan, decisions, ADRs, design direction
+docs/             Plan, architecture writeup, decisions, ADRs, evaluation
 ```
 
 The §5 service boundaries hold from Phase 0: the core API never holds media
@@ -129,9 +180,20 @@ Reported per §18.1. Nothing here is rounded up.
 
 | Phase | Gate | Status |
 |---|---|---|
-| 0 — Foundations | A logged-in user sees an empty shell on a public URL | **PARTIAL** — see below |
-| 1 — Media spine | One video plays adaptively with working seek and resume | **PARTIAL** — plays and seeks; resume unverified end to end; upload/transcode blocked on Bunny credentials |
+| 0 — Foundations | A logged-in user sees an empty shell on a public URL | **PARTIAL** — public URL and shell met; no sign-in has ever succeeded ([detail](#phase-0-detail)) |
+| 1 — Media spine | One video plays adaptively with working seek and resume | **PARTIAL** — plays and seeks; upload and transcode blocked on Bunny credentials |
 | 2 — Core surfaces | A visitor can browse, watch, and comment | **PARTIAL** — browse and watch verified; posting a comment has never completed, because it needs a session |
+| 3 — Identity surfaces | All four built on the shared list abstraction, not four one-offs | **MET** — one `Collection` declaration each, one loader, one web component behind four routes |
+| 4 — Referenced ingest | 1,500+ Class B videos in the feed; unavailable states designed | **MET** — 3,048 across 37 channels, with designed unavailable states. From a fixture provider, not the real API |
+| 5 — Pipeline | 50 hours indexed; stage machine survives forced failure injection | **PARTIAL** — failure injection met and tested; 7 hours indexed, not 50 |
+| 6 — AI layer | Citation-seek works end to end; refusal behaviour verified | **MET** — clicking a citation seeks the player; refusal verified by tests and by the eval harness. On fixture transcripts |
+| 7 — Evaluation | Numbers and methodology in the README | **MET** — both below, including the sweep result that was deliberately not adopted |
+| 8 — Shorts | No stutter on a mid-range Android device | **NOT MET** — no such device available, and the browser used for verification fires no scroll or IntersectionObserver events |
+| 9 — Recsys | Beats popularity baseline, or the failure is analysed | **MET via the second clause** — it loses, and [`docs/recommendations.md`](docs/recommendations.md) is the analysis |
+| 10 — Ship | Public URL, three-minute demo, architecture writeup | **PARTIAL** — URL and writeup done; the demo exists as a shot-by-shot script, because recording video is not something I can do |
+
+Five met, five partial, one not met. Every partial is blocked on either a
+credential or hardware, and each one says which.
 
 The design system is frozen as of Phase 2, per §18.3.
 
@@ -226,6 +288,91 @@ by rules; a model trained on their output learns those rules. §12.2 forbids
 presenting synthetic results as real, and the same applies to a synthetic-data
 score. Full analysis: [`docs/recommendations.md`](docs/recommendations.md).
 
+## AI playlists
+
+Describe what you want to understand. Loupe searches inside the talks rather
+than their titles, keeps the ones that genuinely address the brief, orders them,
+and saves a real playlist with a written rationale and a start time per item.
+
+The contract clause that shaped the design is the failure one: *return fewer
+items rather than padding with poor matches.* A brief that clears the floor for
+four talks produces four. A brief that clears it for none refuses.
+
+Building it found a real bug in my own reasoning. The inclusion floor started as
+the citation threshold, 0.34, on the assumption that "related enough to cite"
+and "related enough to include" are the same question. Composing against the
+real index:
+
+```
+how attention scales with sequence length    0.644 – 0.649
+making inference cheap enough to deploy      0.493 – 0.505
+underwater basket weaving for beginners      0.363 – 0.372   ← cleared 0.34
+```
+
+The third produced a confident eight-talk playlist of GPU systems talks. bge-m3
+puts unrelated text near 0.35, so any absolute threshold down there sits inside
+the model's noise floor and separates nothing.
+
+The second finding matters more and raising the floor did not touch it. Look at
+the on-topic range: eight talks separated by five thousandths, because all eight
+indexed transcripts come from one fixture template. The ordering the rationale
+describes is real in the code and meaningless in the output.
+
+Both findings: [`docs/ai-playlists.md`](docs/ai-playlists.md).
+
+## Cost
+
+§14 sets a target of under $10 a month. Actual spend to date is **$0**, which is
+less an achievement than a consequence: the paid services are the ones still
+unprovisioned.
+
+| Item | Plan | Actual | Why |
+|---|---|---|---|
+| Media (Bunny Stream) | ~$4 | $0 | No account. Storage and delivery both bill on use, and nothing has been uploaded |
+| Database | Free tier | $0 | Local Postgres 17 with pgvector. Supabase free tier when hosted |
+| Web hosting (Vercel) | $0–7 | $0 | Hobby tier, well inside its limits at this traffic |
+| API and workers | $0–7 | $0 | Not deployed. Render and Fly.io both have free tiers that fit |
+| LLM inference | Free tier, hard cap | $0 | No model key configured, so answers are extractive. The cap is enforced in the worker, not by discipline |
+| Transcription | Free GPU compute | $0 | Fixture transcriber. Real ASR needs the §10.3 batch |
+| Domain | ~$12/year | $0 | `loupe.video` looks unregistered. Not confirmed, not bought |
+
+The two numbers that would move if this went live: media, which scales with
+storage plus egress and is why the owned catalogue is capped at 50 hours, and
+transcription, which is one-time per video and is the reason for a cap enforced
+in code.
+
+## What I would do next
+
+In order, because the order matters more than the list.
+
+**1. Provision the three accounts and close five gates at once.** Supabase,
+Bunny, and a YouTube Data API key. Auth, comment posting, progress writes, real
+uploads, and real ingest are all written and tested and all blocked on
+credentials. This is the highest-value hour available and it is not close.
+
+**2. Get a real corpus.** Fifty hours of genuinely different talks with real
+audio. Three separate pieces of work hit this same wall: chapter detection found
+no boundaries, the recommender lost to popularity, and playlist ranking became
+noise. Each has its own writeup and they all say the same thing. Nothing else on
+this list improves a quality number until this is done.
+
+**3. Re-run every evaluation against it and publish what comes out.** Including
+the threshold sweep that was deliberately left unadopted. A threshold fitted to
+24 fixture cases means nothing; the same sweep over real transcripts would mean
+something, and might well pick a different value.
+
+**4. Test shorts on real hardware.** The Phase 8 gate is the only one with no
+partial credit, and it needs a mid-range Android phone rather than more code.
+
+**5. Recruit fifteen to twenty real users for two weeks.** §12.2's third option.
+The recommendation analysis says plainly that a win on synthetic data would not
+have meant the recommendations are good. Real interaction data is the only thing
+that changes that.
+
+Deliberately not on this list: tuning any threshold to improve a published
+number, and adding features. The gap between this project and a convincing one
+is entirely about the corpus and the credentials.
+
 ## Limitations
 
 Recorded as they are incurred, per the working agreement.
@@ -257,10 +404,11 @@ Recorded as they are incurred, per the working agreement.
 - **Comment posting has never completed.** The endpoint is tested against a real
   Postgres including the one-reply-level limit, but the browser path needs a
   signed-in session, which needs Supabase.
-- **Search matches titles and descriptions only.** Full-text ranking over
-  titles, descriptions, and channel names — which is all Class B content can
-  ever support. Searching *inside* transcripts is Phase 6, and the results page
-  says so rather than implying otherwise.
+- **Search covers two different things at once.** Semantic search runs over
+  transcript chunks for Class A; Class B can only ever support title,
+  description, and channel matching. Results from the two are not comparable
+  measurements, and although the UI marks which is which, the ranking still
+  mixes them.
 - **Transcripts are generated, not transcribed.** The owned talks point at a
   test stream with no speech in it, so the pipeline runs a fixture transcriber.
   Every row it produced is stored with `engine = 'fixture'` and is identifiable
@@ -272,8 +420,16 @@ Recorded as they are incurred, per the working agreement.
   than a degraded mode — and the right thing for §11.2 to measure a generative
   answerer against. Setting `GEMINI_API_KEY` routes to a model behind the same
   interface, with the refusal check still made before it is called.
-- **6.2 hours indexed, not 50.** The Phase 5 gate asks for 50; reaching it
-  needs real audio and the GPU backfill §10.3 describes.
+- **7 hours indexed, not 50.** The Phase 5 gate asks for 50; reaching it needs
+  real audio and the GPU backfill §10.3 describes.
+- **The AI playlist inclusion floor is calibrated on three briefs.** It
+  separates on-topic from off-topic on this corpus and is recorded as
+  provisional rather than tuned, because three observations over eight videos is
+  not a calibration.
+- **The demo video does not exist as a video.** §16 asks for three minutes of
+  screen recording. What exists is a shot-by-shot script with the seed state
+  each shot needs, in [`docs/demo-script.md`](docs/demo-script.md), because
+  recording and narrating video is outside what I can produce.
 - **The referenced catalogue is generated, not ingested.** No YouTube Data API
   key is configured, so the worker runs against a deterministic fixture
   provider. The worker, the quota ledger, the idempotency, and the write path

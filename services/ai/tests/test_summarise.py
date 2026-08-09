@@ -84,7 +84,90 @@ class TestSentenceSplitting:
         assert first_sentences("One. Two. Three. Four.", 2) == "One. Two."
 
     def test_it_copes_with_no_terminator(self):
-        assert first_sentences("no full stop here", 3) == "no full stop here"
+        # Capitalised, because a chunk with no terminator is usually one that
+        # got cut mid-sentence, and this text becomes page copy.
+        assert first_sentences("no full stop here", 3) == "No full stop here"
 
     def test_empty_text(self):
         assert first_sentences("   ", 2) == ""
+
+
+class TestSentenceSelection:
+    def test_a_restated_sentence_is_not_counted_twice(self):
+        """
+        Found by reading the video page, not by a test. A chunk spanning a
+        speaker's restatement produced a three-sentence TL;DR carrying one
+        sentence of information.
+        """
+        text = (
+            "We store the keys across decoding steps. "
+            "Paged attention removes the contiguous allocation requirement. "
+            "We store the keys across decoding steps. "
+            "Arithmetic intensity is what actually bounds you."
+        )
+
+        assert first_sentences(text, 3) == (
+            "We store the keys across decoding steps. "
+            "Paged attention removes the contiguous allocation requirement. "
+            "Arithmetic intensity is what actually bounds you."
+        )
+
+    def test_repeats_are_matched_regardless_of_case_and_spacing(self):
+        text = "The cache is the point.  the  cache is the point. Something else."
+
+        assert first_sentences(text, 3) == "The cache is the point. Something else."
+
+    def test_a_passage_starting_mid_sentence_still_reads_like_one(self):
+        """
+        Chunks split on pauses and overlap, so a passage often starts partway
+        through a sentence. Correct for retrieval, broken as page copy.
+        """
+        assert first_sentences("changes the memory arithmetic again.", 1) == (
+            "Changes the memory arithmetic again."
+        )
+
+    def test_it_still_stops_at_the_requested_count(self):
+        text = "One. Two. Three. Four."
+
+        assert first_sentences(text, 2) == "One. Two."
+
+    def test_empty_text_produces_nothing_rather_than_an_index_error(self):
+        assert first_sentences("   ", 3) == ""
+
+
+class TestKeyPointDeduplication:
+    def test_a_point_the_speaker_returns_to_appears_once(self):
+        """
+        The spread rule takes one passage per fifth of the talk. When a speaker
+        comes back to a point, two fifths can land on the same sentence, and a
+        five-point summary carrying the same line twice is worse than a
+        four-point one that does not.
+        """
+        repeated = "Arithmetic intensity is what actually bounds you."
+        texts = [
+            "Opening remarks about the agenda.",
+            "The roofline model has two regimes.",
+            repeated,
+            "Batching changes tail latency.",
+            repeated,
+            "Closing thoughts on deployment.",
+        ]
+        starts = [0.0, 100.0, 200.0, 300.0, 400.0, 500.0]
+        embeddings = [[1.0, 0.0] for _ in texts]
+
+        summary = summarise(texts, starts, embeddings)
+
+        assert summary is not None
+        assert len(summary.key_points) == len({p.text for p in summary.key_points})
+        assert sum(1 for p in summary.key_points if p.text == repeated) <= 1
+
+    def test_a_talk_that_says_one_thing_produces_no_summary(self):
+        """
+        §11: hide the block rather than show a partial summary. If deduplication
+        leaves a single point, there was nothing to summarise.
+        """
+        texts = ["The same sentence."] * 6
+        starts = [float(i * 100) for i in range(6)]
+        embeddings = [[1.0, 0.0] for _ in texts]
+
+        assert summarise(texts, starts, embeddings) is None

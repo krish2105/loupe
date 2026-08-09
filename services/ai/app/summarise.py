@@ -40,8 +40,46 @@ class Summary:
 
 
 def first_sentences(text: str, count: int) -> str:
-    parts = [part.strip() for part in _SENTENCE.split(text.strip()) if part.strip()]
-    return " ".join(parts[:count])
+    """
+    The opening sentences of a passage, deduplicated and starting like a
+    sentence.
+
+    Two corrections, both from reading the output on the video page rather than
+    from a test.
+
+    Repeats are dropped. A speaker restating a point is normal, and a chunk that
+    happens to span the restatement produced a TL;DR reading "we store the keys
+    across decoding steps. paged attention removes the contiguous allocation
+    requirement. we store the keys across decoding steps." Three sentences by
+    the contract's count, one sentence of information.
+
+    The first letter is capitalised. Chunks split on pauses and overlap by
+    roughly fifty tokens, so a passage frequently starts mid-sentence. That is
+    correct for retrieval and reads as broken when it becomes the first thing
+    on the page.
+    """
+    seen: set[str] = set()
+    kept: list[str] = []
+
+    for part in _SENTENCE.split(text.strip()):
+        sentence = part.strip()
+        if not sentence:
+            continue
+
+        key = " ".join(sentence.lower().split())
+        if key in seen:
+            continue
+
+        seen.add(key)
+        kept.append(sentence)
+        if len(kept) == count:
+            break
+
+    if not kept:
+        return ""
+
+    joined = " ".join(kept)
+    return joined[0].upper() + joined[1:]
 
 
 def _centroid(vectors: list[list[float]]) -> list[float]:
@@ -98,11 +136,25 @@ def summarise(
     if len(chosen) < 2:
         return None
 
-    key_points = [
-        KeyPoint(text=first_sentences(texts[index], 1) or texts[index][:200],
-                 start_sec=starts[index])
-        for index in sorted(set(chosen))
-    ]
+    # Two buckets can land on the same sentence when a speaker returns to a
+    # point. Five key points where two are identical is a worse summary than
+    # four distinct ones, so the duplicate is dropped rather than replaced with
+    # the next-best passage from that fifth: the next-best is chosen for score,
+    # not for saying something new, and padding to five is how a summary starts
+    # containing filler. Same judgement as the playlist floor.
+    key_points: list[KeyPoint] = []
+    said: set[str] = set()
+
+    for index in sorted(set(chosen)):
+        text = first_sentences(texts[index], 1) or texts[index][:200]
+        key = " ".join(text.lower().split())
+        if key in said:
+            continue
+        said.add(key)
+        key_points.append(KeyPoint(text=text, start_sec=starts[index]))
+
+    if len(key_points) < 2:
+        return None
 
     # The TL;DR comes from the single most central passage, capped at three
     # sentences by the contract.
