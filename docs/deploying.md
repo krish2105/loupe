@@ -20,7 +20,22 @@ commit, or an issue — put them straight into the platform's secret store.
 
 ### DATABASE_URL
 
-From Supabase, after creating the project in step 1.
+Build it with `db/url.sh` rather than by hand:
+
+```bash
+export LOUPE_DB="$(./db/url.sh 'postgresql://postgres.<ref>:[YOUR-PASSWORD]@aws-0-<region>.pooler.supabase.com:6543/postgres')"
+psql "$LOUPE_DB" -c "SELECT 1"
+```
+
+Paste the URI exactly as Supabase prints it, placeholder and all. The script
+prompts for the password without echoing it, percent-encodes it, and prints the
+finished URL — so it stays out of shell history and off the screen, and the
+encoding step that keeps going wrong is not yours to do.
+
+Every command after that takes `"$LOUPE_DB"`, which is also why the password
+stops appearing in instructions.
+
+The manual route, and what the dashboard shows:
 
 1. Open the project and click **Connect** at the top of the dashboard. (Older
    dashboards put this under **Project Settings → Database → Connection
