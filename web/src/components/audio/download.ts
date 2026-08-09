@@ -96,7 +96,26 @@ export async function downloadEpisode(
     ),
   );
 
+  await announceChange();
   return bytes.byteLength;
+}
+
+/**
+ * Tell the service worker which URLs it now holds.
+ *
+ * The worker decides synchronously whether to intercept a request, so it keeps
+ * the list in memory. Without this it would only learn about a download on its
+ * next activation, and an episode saved for a flight would not play offline
+ * until the browser happened to restart the worker.
+ */
+async function announceChange(): Promise<void> {
+  try {
+    const registration = await navigator.serviceWorker?.ready;
+    registration?.active?.postMessage({ type: "downloads-changed" });
+  } catch {
+    // No worker registered, or messaging unavailable. Downloads still work
+    // online; only the offline path needs the worker.
+  }
 }
 
 export async function removeDownload(hlsUrl: string): Promise<void> {
@@ -114,6 +133,8 @@ export async function removeDownload(hlsUrl: string): Promise<void> {
       await cache.delete(request);
     }
   }
+
+  await announceChange();
 }
 
 export async function isDownloaded(hlsUrl: string): Promise<boolean> {

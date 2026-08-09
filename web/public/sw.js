@@ -21,6 +21,45 @@
 const SHELL = "loupe-shell-v1";
 const MEDIA = "loupe-media-v1";
 
+/*
+  Exactly which media URLs have been downloaded.
+
+  Held in memory because `event.respondWith` must be called synchronously, and
+  looking in Cache Storage is async — so without this the worker has to decide
+  whether to intervene before it knows whether it has anything, and the only
+  way to do that is to intervene in everything.
+
+  Intervening in everything is what broke playback. hls.js fetches a manifest
+  and a hundred byte-ranges per episode, all cross-origin. Passing each one
+  through `fetch(request)` inside the worker re-issues it from a different
+  context, and this CDN sends `Vary: Origin, Access-Control-Request-Headers,
+  Access-Control-Request-Method`, so responses are stored per header variant and
+  the re-issued request can miss the variant and fail. The symptom was a player
+  that attached, produced a blob URL, and then sat at readyState 0 forever with
+  no error — because hls.js's own requests were failing, not the element.
+
+  With this set, a request the worker has nothing for is never touched. The
+  browser fetches it exactly as it would with no worker installed.
+*/
+let downloaded = new Set();
+
+async function refreshDownloaded() {
+  try {
+    const cache = await caches.open(MEDIA);
+    downloaded = new Set((await cache.keys()).map((request) => request.url));
+  } catch {
+    downloaded = new Set();
+  }
+}
+
+// The page tells the worker when a download starts or is removed, so the set
+// stays correct without polling.
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "downloads-changed") {
+    event.waitUntil(refreshDownloaded());
+  }
+});
+
 // Navigation requests only. Hashed build assets are handled by the browser's
 // own HTTP cache, which is better at it than anything written here.
 const PRECACHE = ["/", "/listen", "/offline"];
@@ -48,6 +87,7 @@ self.addEventListener("activate", (event) => {
             .map((key) => caches.delete(key)),
         ),
       )
+      .then(() => refreshDownloaded())
       .then(() => self.clients.claim()),
   );
 });
@@ -74,22 +114,23 @@ self.addEventListener("fetch", (event) => {
 
   if (request.method !== "GET") return;
 
-  // Network-first for media too, and that ordering matters more here than it
-  // looks. A downloaded episode stores a rewritten master offering only the
-  // audio rendition. Serving that while online would silently cap every stream
-  // at audio quality, on a page showing a video player. Online gets the real
-  // manifest; only a failed fetch falls back to what was stored.
+  // Nothing downloaded for this URL: stay out of the way entirely. Not "fetch
+  // and pass it through" — not intercepting at all, so the request is identical
+  // to one made with no worker installed.
+  if (!downloaded.has(request.url)) return;
+
+  // Network-first even for a downloaded URL, and that ordering matters. A
+  // downloaded episode stores a rewritten master offering only the audio
+  // rendition; serving it while online would silently cap every stream at audio
+  // quality on a page showing a video player. Online gets the real manifest,
+  // and only a failed fetch falls back to what was stored.
   event.respondWith(
     (async () => {
       try {
         return await fetch(request);
       } catch (error) {
-        // Only substitute a download when there actually is one. Returning a
-        // synthetic error on a miss replaced every genuine network failure with
-        // an indistinguishable one, which is how a browser-cache problem spent
-        // an afternoon looking like a service-worker problem.
-        const downloaded = await serveDownloaded(request);
-        if (downloaded) return downloaded;
+        const stored = await serveDownloaded(request);
+        if (stored) return stored;
         throw error;
       }
     })(),
