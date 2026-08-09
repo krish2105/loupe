@@ -28,22 +28,37 @@ class TestAbsoluteReferences:
 
 
 class TestBucketKeys:
-    def test_renders_a_key_as_a_media_service_address(self):
-        key = "videos/abc/hls/master.m3u8"
+    def test_rewrites_a_key_into_the_media_service_route(self):
+        """
+        The stored key and the route are different shapes. The key is
+        `videos/<id>/hls/<tail>`; the route is `/v1/hls/<id>/<tail>` and
+        rebuilds the key itself. Prefixing the whole key made the route read
+        id="videos" and look for `videos/videos/<id>/...`, which 404s and looks
+        like missing media rather than a malformed URL.
+        """
+        assert playable_url("videos/abc/hls/master.m3u8", MEDIA) == (
+            f"{MEDIA}/v1/hls/abc/master.m3u8"
+        )
 
-        assert playable_url(key, MEDIA) == f"{MEDIA}/v1/hls/{key}"
+    def test_keeps_a_nested_rendition_path(self):
+        assert playable_url("videos/abc/hls/720p/index.m3u8", MEDIA) == (
+            f"{MEDIA}/v1/hls/abc/720p/index.m3u8"
+        )
 
     def test_tolerates_a_trailing_slash_on_the_base(self):
         assert playable_url("videos/abc/hls/master.m3u8", MEDIA + "/") == (
-            f"{MEDIA}/v1/hls/videos/abc/hls/master.m3u8"
+            f"{MEDIA}/v1/hls/abc/master.m3u8"
         )
 
     def test_tolerates_a_leading_slash_on_the_key(self):
-        # Would otherwise produce `/v1/hls//videos/...`, which is a different
-        # path and 404s.
         assert playable_url("/videos/abc/hls/master.m3u8", MEDIA) == (
-            f"{MEDIA}/v1/hls/videos/abc/hls/master.m3u8"
+            f"{MEDIA}/v1/hls/abc/master.m3u8"
         )
+
+    def test_refuses_to_guess_at_an_unrecognised_layout(self):
+        # Better None than a URL built on an assumption about a key shape that
+        # has since changed.
+        assert playable_url("some/other/layout.m3u8", MEDIA) is None
 
 
 class TestNothingToPlay:

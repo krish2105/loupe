@@ -50,4 +50,15 @@ def playable_url(stored: str | None, media_service_url: str) -> str | None:
     if not base:
         return None
 
-    return f"{base}/v1/hls/{reference.lstrip('/')}"
+    # The stored key is `videos/<id>/hls/<tail>`; the media service's route is
+    # `/v1/hls/<id>/<tail>` and rebuilds the key itself. Prefixing the whole key
+    # produces `/v1/hls/videos/<id>/hls/...`, which the route reads as
+    # id="videos" and then looks for `videos/videos/<id>/hls/...` — a 404 that
+    # looks like missing media rather than a malformed URL.
+    parts = reference.lstrip("/").split("/")
+    if len(parts) >= 4 and parts[0] == "videos" and parts[2] == "hls":
+        return f"{base}/v1/hls/{parts[1]}/{'/'.join(parts[3:])}"
+
+    # An unrecognised shape is not ours to route. Better None than a URL built
+    # on a guess about a layout that has changed.
+    return None
