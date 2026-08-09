@@ -349,3 +349,83 @@ Then in a browser: sign up, post a comment, and watch thirty seconds of a talk.
 Those three exercise auth, a browser write through CORS, and the append-only
 watch log. If all three work, the deployment is real — and if the comment fails
 while `curl` succeeds, it is `CORS_ORIGINS`.
+
+
+## Media storage, and the transcoder
+
+Phase 12 added real media. Three things have to be set for it to work in
+production, and the failure when they are not is quiet rather than loud: the
+media service reports `provider_configured: false`, uploads answer 503, and
+nothing else complains.
+
+### Render → loupe-media → Environment
+
+```
+S3_ENDPOINT          https://s3.us-east-005.backblazeb2.com
+S3_REGION            us-east-005
+S3_BUCKET            loupe-media
+S3_KEY_ID            from Backblaze → Application Keys
+S3_APPLICATION_KEY   shown once when the key is created
+PUBLIC_BASE_URL      https://loupe-media.onrender.com
+CORS_ORIGINS         https://loupe-pied.vercel.app
+INTERNAL_TOKEN       openssl rand -hex 32
+```
+
+`CORS_ORIGINS` is the one that looks optional and is not. The browser fetches
+every playlist from this service during playback, so without it video fails
+with no server-side symptom at all — every request succeeds and nothing plays.
+
+`INTERNAL_TOKEN` gates `/v1/internal/sign`, which is how the transcoder gets
+bucket URLs without holding provider credentials of its own. Unset, the
+endpoint 404s rather than defaulting to something guessable, so the transcoder
+cannot run and says so.
+
+### The bucket needs CORS of its own
+
+Separate from the service's. hls.js fetches segments by XHR from the page, so
+the bucket has to send `Access-Control-Allow-Origin` and allow the `Range`
+header. Configure once:
+
+```bash
+aws s3api put-bucket-cors --endpoint-url "$S3_ENDPOINT" --bucket "$S3_BUCKET" \
+  --cors-configuration '{"CORSRules":[{
+    "AllowedOrigins":["https://loupe-pied.vercel.app","http://localhost:3000"],
+    "AllowedMethods":["GET","HEAD","PUT"],
+    "AllowedHeaders":["*"],
+    "ExposeHeaders":["Content-Length","Content-Range","ETag"],
+    "MaxAgeSeconds":3600}]}'
+```
+
+`PUT` is needed because the browser uploads straight to the bucket. Verify on
+the wire rather than trusting the config — a CDN with CORS configured that does
+not send the headers on ranged responses is exactly the failure that cost a day
+earlier in this project:
+
+```bash
+curl -s -o /dev/null -D - -X OPTIONS "<a presigned url>" \
+  -H "Origin: https://loupe-pied.vercel.app" \
+  -H "Access-Control-Request-Method: GET" \
+  -H "Access-Control-Request-Headers: range" | grep -i access-control
+```
+
+### The transcoder is not deployed
+
+It is a poller, not a service, so it runs anywhere with ffmpeg and a database
+connection — including a laptop:
+
+```bash
+cd services/pipeline
+DATABASE_URL=... MEDIA_SERVICE_URL=https://loupe-media.onrender.com \
+INTERNAL_TOKEN=... GROQ_API_KEY=... USE_REAL_MODELS=true \
+  uv run python -m app.run
+```
+
+Somewhere unattended is better. Oracle Cloud's always-free ARM instance is the
+intended home and was unavailable at the time of writing — "out of host
+capacity" is normal in busy regions and clears with retries. Google Cloud Run
+jobs are the alternative, with 180,000 vCPU-seconds free per month, which is
+roughly a hundred talks.
+
+Nothing about the pipeline changes when it moves. It holds no bucket
+credentials and no ports; it asks the media service to sign, does the work, and
+writes rows.

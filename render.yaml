@@ -161,3 +161,37 @@ services:
       # unguessable path segment. openssl rand -hex 32
       - key: WEBHOOK_SECRET
         sync: false
+
+      # S3 storage — Backblaze B2 today, addressed as plain S3 so the same
+      # code reaches R2, AWS or MinIO by changing the endpoint. With these set
+      # the service prefers S3 over Bunny; with them empty it falls back, and
+      # with neither it reports itself unconfigured rather than failing.
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_KEY_ID
+        sync: false
+      - key: S3_APPLICATION_KEY
+        sync: false
+
+      # Where the browser reaches this service. Rewritten playlists point back
+      # here for nested playlists, so a relative URL will not do — the player
+      # would resolve it against the bucket.
+      - key: PUBLIC_BASE_URL
+        sync: false
+
+      # Origins allowed to call this from a page. The browser talks to this
+      # service directly for upload tickets and for every playlist during
+      # playback, so without this playback fails with no server-side symptom.
+      - key: CORS_ORIGINS
+        sync: false
+
+      # Shared secret for /v1/internal/sign, which lets the transcoder get
+      # bucket URLs without holding provider credentials of its own. Empty
+      # means the endpoint does not exist rather than being guessable.
+      # openssl rand -hex 32
+      - key: INTERNAL_TOKEN
+        sync: false
