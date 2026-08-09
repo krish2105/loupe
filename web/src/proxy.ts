@@ -16,6 +16,28 @@ import { SUPABASE_ANON_KEY, SUPABASE_URL, isSupabaseConfigured } from "@/lib/sup
 export async function proxy(request: NextRequest) {
   if (!isSupabaseConfigured) return NextResponse.next();
 
+  /*
+    A confirmation link that landed somewhere other than /auth/callback.
+
+    Sign-up asks Supabase to send people to `${origin}/auth/callback`, but
+    Supabase ignores that unless the URL is in its allow-list, and falls back to
+    the project's Site URL — which on a new project is `http://localhost:3000`.
+    The link then arrives at `/?code=…`, the code is never exchanged, and the
+    person is signed out with no explanation. Worse, on a machine running
+    another project on port 3000, the link opens a different application
+    entirely.
+
+    Fixing the Site URL in the dashboard is the real fix and no code can do it
+    from here. Forwarding the code is what stops a misconfiguration from eating
+    a single-use link: the code is valid, it just arrived at the wrong door.
+  */
+  const code = request.nextUrl.searchParams.get("code");
+  if (code && request.nextUrl.pathname === "/") {
+    const callback = request.nextUrl.clone();
+    callback.pathname = "/auth/callback";
+    return NextResponse.redirect(callback);
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
