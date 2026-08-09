@@ -21,9 +21,9 @@ import { cn } from "@/lib/utils";
 type Mode = "signin" | "signup";
 
 const fieldStyles = cn(
-  "mt-2 h-10 w-full rounded-(--radius-sm) border border-rule bg-hall px-3",
-  "text-(length:--step-0) text-screen placeholder:text-dust",
-  "outline-none transition-colors focus:border-dust",
+  "mt-2 h-10 w-full rounded-(--radius-sm) border border-rule bg-canvas px-3",
+  "text-(length:--step-0) text-ink placeholder:text-muted",
+  "outline-none transition-colors focus:border-muted",
 );
 
 export function LoginForm() {
@@ -83,7 +83,7 @@ export function LoginForm() {
           <h1 className="text-center text-(length:--step-3)">
             {mode === "signin" ? "Sign in to Loupe" : "Create your account"}
           </h1>
-          <p className="text-pretty text-center text-(length:--step--1) text-dust">
+          <p className="text-pretty text-center text-(length:--step--1) text-muted">
             Search inside talks, ask them questions, and keep your place.
           </p>
         </div>
@@ -92,7 +92,7 @@ export function LoginForm() {
           <div>
             <label
               htmlFor="email"
-              className="text-(length:--step--1) font-medium text-screen"
+              className="text-(length:--step--1) font-medium text-ink"
             >
               Email
             </label>
@@ -112,7 +112,7 @@ export function LoginForm() {
           <div>
             <label
               htmlFor="password"
-              className="text-(length:--step--1) font-medium text-screen"
+              className="text-(length:--step--1) font-medium text-ink"
             >
               Password
             </label>
@@ -138,7 +138,7 @@ export function LoginForm() {
             </p>
           )}
           {notice && (
-            <p role="status" className="text-(length:--step--1) text-dust">
+            <p role="status" className="text-(length:--step--1) text-muted">
               {notice}
             </p>
           )}
@@ -147,7 +147,7 @@ export function LoginForm() {
             type="submit"
             disabled={pending}
             className={cn(
-              "h-10 w-full rounded-(--radius-sm) bg-screen text-hall",
+              "h-10 w-full rounded-(--radius-sm) bg-ink text-canvas",
               "text-(length:--step-0) font-medium transition-opacity",
               "hover:opacity-90 disabled:opacity-60",
             )}
@@ -163,7 +163,7 @@ export function LoginForm() {
           </button>
         </form>
 
-        <p className="mt-6 text-center text-(length:--step--1) text-dust">
+        <p className="mt-6 text-center text-(length:--step--1) text-muted">
           {mode === "signin" ? "No account yet?" : "Already have an account?"}{" "}
           <button
             type="button"
@@ -172,14 +172,14 @@ export function LoginForm() {
               setError(null);
               setNotice(null);
             }}
-            className="font-medium text-screen underline underline-offset-4"
+            className="font-medium text-ink underline underline-offset-4"
           >
             {mode === "signin" ? "Create one" : "Sign in"}
           </button>
         </p>
 
         {!isSupabaseConfigured && (
-          <p className="mt-8 rounded-(--radius-md) border border-rule bg-riser p-3 text-(length:--step--2) text-dust">
+          <p className="mt-8 rounded-(--radius-md) border border-rule bg-surface p-3 text-(length:--step--2) text-muted">
             Sign-in is not connected in this environment. Add the two Supabase
             keys to <code className="font-mono">.env.local</code> to enable it.
           </p>

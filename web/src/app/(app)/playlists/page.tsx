@@ -25,14 +25,14 @@ export default async function PlaylistsPage() {
     return (
       <div className="mx-auto max-w-[46ch] py-24 text-center">
         <h1 className="text-(length:--step-3)">Playlists</h1>
-        <p className="mt-3 text-pretty text-(length:--step--1) text-dust">
+        <p className="mt-3 text-pretty text-(length:--step--1) text-muted">
           This is yours, so it needs an account.
         </p>
         <Link
           href="/login"
           className={cn(
-            "mt-6 inline-block rounded-(--radius-sm) bg-screen px-4 py-2",
-            "text-(length:--step--1) font-medium text-hall hover:opacity-90",
+            "mt-6 inline-block rounded-(--radius-sm) bg-ink px-4 py-2",
+            "text-(length:--step--1) font-medium text-canvas hover:opacity-90",
           )}
         >
           Sign in
@@ -50,7 +50,7 @@ export default async function PlaylistsPage() {
       {items.length === 0 ? (
         <div className="mx-auto max-w-[46ch] py-24 text-center">
           <p className="text-(length:--step-1)">No playlists yet</p>
-          <p className="mt-2 text-pretty text-(length:--step--1) text-dust">
+          <p className="mt-2 text-pretty text-(length:--step--1) text-muted">
             Collect talks that belong together. Save one from any talk&rsquo;s
             page.
           </p>
@@ -62,8 +62,8 @@ export default async function PlaylistsPage() {
               <Link
                 href={`/playlists/${playlist.id}`}
                 className={cn(
-                  "block rounded-(--radius-md) border border-rule bg-riser p-4",
-                  "transition-colors hover:border-dust",
+                  "block rounded-(--radius-md) border border-rule bg-surface p-4",
+                  "transition-colors hover:border-muted",
                 )}
               >
                 <p className="flex items-center gap-2 text-(length:--step-0) font-medium">
@@ -73,12 +73,12 @@ export default async function PlaylistsPage() {
                   {playlist.generated_by === "ai" && <MarkNode label="Composed by Loupe" />}
                   {playlist.title}
                 </p>
-                <p className="mt-1 text-(length:--step--1) text-dust">
+                <p className="mt-1 text-(length:--step--1) text-muted">
                   {playlist.item_count} talk
                   {playlist.item_count === 1 ? "" : "s"}
                 </p>
                 {playlist.rationale && (
-                  <p className="mt-3 line-clamp-3 text-pretty text-(length:--step--2) text-dust">
+                  <p className="mt-3 line-clamp-3 text-pretty text-(length:--step--2) text-muted">
                     {playlist.rationale}
                   </p>
                 )}

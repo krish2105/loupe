@@ -26,7 +26,7 @@ function ControlButton({
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="grid size-9 shrink-0 place-items-center rounded-(--radius-sm) text-screen/80 transition-colors hover:text-screen"
+      className="grid size-9 shrink-0 place-items-center rounded-(--radius-sm) text-ink/80 transition-colors hover:text-ink"
     >
       {children}
     </button>
@@ -69,14 +69,14 @@ export function PlayerControls({
           </svg>
         </ControlButton>
 
-        <p className="font-mono text-(length:--step--2) text-screen/80 tabular-nums">
+        <p className="font-mono text-(length:--step--2) text-ink/80 tabular-nums">
           {formatTimecode(currentTime)}
-          <span className="text-screen/45"> / {formatTimecode(duration)}</span>
+          <span className="text-ink/45"> / {formatTimecode(duration)}</span>
         </p>
 
         <div className="ml-auto flex items-center gap-2">
           {level && (
-            <span className="font-mono text-(length:--step--2) text-screen/60">
+            <span className="font-mono text-(length:--step--2) text-ink/60">
               {level}
             </span>
           )}

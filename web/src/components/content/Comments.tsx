@@ -22,7 +22,7 @@ function Avatar({ name }: { name: string }) {
       aria-hidden="true"
       className={cn(
         "grid size-8 shrink-0 place-items-center rounded-full",
-        "border border-rule bg-riser font-mono text-(length:--step--2) text-dust",
+        "border border-rule bg-surface font-mono text-(length:--step--2) text-muted",
       )}
     >
       {name.slice(0, 1).toUpperCase()}
@@ -43,7 +43,7 @@ function CommentBody({
       <div className="min-w-0 flex-1">
         <p className="text-(length:--step--1)">
           <span className="font-medium">{comment.author.display_name}</span>{" "}
-          <span className="text-dust">{formatAge(comment.created_at)}</span>
+          <span className="text-muted">{formatAge(comment.created_at)}</span>
         </p>
         <p className="mt-1 whitespace-pre-line text-pretty text-(length:--step-0)">
           {comment.body}
@@ -52,7 +52,7 @@ function CommentBody({
           <button
             type="button"
             onClick={onReply}
-            className="mt-1.5 text-(length:--step--2) font-medium text-dust hover:text-screen"
+            className="mt-1.5 text-(length:--step--2) font-medium text-muted hover:text-ink"
           >
             Reply
           </button>
@@ -132,9 +132,9 @@ function Composer({
         placeholder={placeholder}
         rows={3}
         className={cn(
-          "w-full resize-y rounded-(--radius-sm) border border-rule bg-hall px-3 py-2",
-          "text-(length:--step-0) text-screen placeholder:text-dust",
-          "outline-none transition-colors focus:border-dust",
+          "w-full resize-y rounded-(--radius-sm) border border-rule bg-canvas px-3 py-2",
+          "text-(length:--step-0) text-ink placeholder:text-muted",
+          "outline-none transition-colors focus:border-muted",
         )}
       />
 
@@ -149,8 +149,8 @@ function Composer({
           type="submit"
           disabled={pending || body.trim().length === 0}
           className={cn(
-            "rounded-(--radius-sm) bg-screen px-3 py-1.5",
-            "text-(length:--step--1) font-medium text-hall",
+            "rounded-(--radius-sm) bg-ink px-3 py-1.5",
+            "text-(length:--step--1) font-medium text-canvas",
             "transition-opacity hover:opacity-90 disabled:opacity-40",
           )}
         >
@@ -161,7 +161,7 @@ function Composer({
           <button
             type="button"
             onClick={onDone}
-            className="text-(length:--step--1) text-dust hover:text-screen"
+            className="text-(length:--step--1) text-muted hover:text-ink"
           >
             Cancel
           </button>
@@ -193,8 +193,8 @@ export function Comments({
       {isSignedIn ? (
         <Composer videoId={videoId} placeholder="Add a comment" />
       ) : (
-        <p className="mt-3 rounded-(--radius-md) border border-rule bg-riser p-4 text-(length:--step--1) text-dust">
-          <Link href="/login" className="font-medium text-screen underline underline-offset-4">
+        <p className="mt-3 rounded-(--radius-md) border border-rule bg-surface p-4 text-(length:--step--1) text-muted">
+          <Link href="/login" className="font-medium text-ink underline underline-offset-4">
             Sign in
           </Link>{" "}
           to join the conversation.
@@ -202,7 +202,7 @@ export function Comments({
       )}
 
       {comments.length === 0 ? (
-        <p className="mt-8 text-(length:--step--1) text-dust">
+        <p className="mt-8 text-(length:--step--1) text-muted">
           No comments yet. Say the first thing.
         </p>
       ) : (

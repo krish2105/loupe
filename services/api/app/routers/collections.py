@@ -227,6 +227,91 @@ async def list_collections(
     }
 
 
+@router.get("/notifications")
+async def notifications(
+    limit: int = Query(50, ge=1, le=100),
+    user_id: UUID = Depends(require_user_id),
+) -> dict[str, object]:
+    """
+    §6.2: fan-out on write, so this is a plain read of one person's rows.
+
+    Nothing writes notifications yet — that arrives with the ingest worker,
+    which is what creates new-upload events. The surface is real and simply
+    empty, which is the honest state rather than a placeholder.
+    """
+    pool = require_pool()
+
+    rows = await pool.fetch(
+        """
+        SELECT n.id, n.kind::text AS kind, n.target_id, n.created_at, n.read_at,
+               v.title AS target_title, c.name AS channel_name, c.handle AS channel_handle
+        FROM notifications n
+        LEFT JOIN videos v ON v.id = n.target_id
+        LEFT JOIN channels c ON c.id = v.channel_id
+        WHERE n.user_id = $1
+        ORDER BY n.created_at DESC
+        LIMIT $2
+        """,
+        user_id,
+        limit,
+    )
+
+    return {
+        "items": [
+            {
+                "id": str(row["id"]),
+                "kind": row["kind"],
+                "target_id": str(row["target_id"]),
+                "target_title": row["target_title"],
+                "channel_name": row["channel_name"],
+                "channel_handle": row["channel_handle"],
+                "created_at": row["created_at"].isoformat(),
+                "read": row["read_at"] is not None,
+            }
+            for row in rows
+        ],
+        "unread": sum(1 for row in rows if row["read_at"] is None),
+    }
+
+
+@router.get("/channels")
+async def subscribed_channels(
+    user_id: UUID = Depends(require_user_id),
+) -> dict[str, object]:
+    """
+    Channels this person follows, for the sidebar.
+
+    Separate from the subscriptions *collection*, which returns their videos.
+    The sidebar wants the channels themselves, and asking for 48 videos to
+    derive a list of four channels would be absurd.
+    """
+    pool = require_pool()
+
+    rows = await pool.fetch(
+        """
+        SELECT c.id, c.handle, c.name, c.avatar_url, s.notify_enabled
+        FROM subscriptions s
+        JOIN channels c ON c.id = s.channel_id
+        WHERE s.user_id = $1
+        ORDER BY c.name
+        """,
+        user_id,
+    )
+
+    return {
+        "items": [
+            {
+                "id": str(row["id"]),
+                "handle": row["handle"],
+                "name": row["name"],
+                "avatar_url": row["avatar_url"],
+                "notify_enabled": row["notify_enabled"],
+            }
+            for row in rows
+        ]
+    }
+
+
 # --------------------------------------------------------------- membership ---
 # Adds are idempotent PUTs rather than POSTs: clicking Save twice is a thing
 # people do, and the second click should be a no-op rather than an error.

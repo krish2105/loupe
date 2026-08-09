@@ -59,9 +59,9 @@ export default async function PlaylistPage({
       {/* §11: an AI playlist's output contract includes a written rationale for
           the ordering, so it is shown rather than stored and forgotten. */}
       {playlist.generated_by === "ai" && playlist.rationale && (
-        <div className="mt-8 rounded-(--radius-md) border border-rule bg-riser p-4">
+        <div className="mt-8 rounded-(--radius-md) border border-rule bg-surface p-4">
           <h2 className="text-(length:--step--1) font-medium">Why this order</h2>
-          <p className="mt-2 text-pretty text-(length:--step--1) text-dust">
+          <p className="mt-2 text-pretty text-(length:--step--1) text-muted">
             {playlist.rationale}
           </p>
         </div>

@@ -156,6 +156,58 @@ async def feed(
     return {"items": items, "next_cursor": next_cursor}
 
 
+@router.get("/search")
+async def search(
+    q: str = Query(..., min_length=1, max_length=200),
+    limit: int = Query(36, ge=1, le=60),
+) -> dict[str, object]:
+    """
+    Keyword search over titles, descriptions, and channel names.
+
+    This is the §4 baseline that works for *both* content classes — Class B
+    carries no transcript, so title and description is all there is. Semantic
+    search inside transcripts is Phase 6 and is a different query against
+    transcript_chunks; this endpoint stays as the fallback §11 requires when
+    embeddings are unavailable, and as the only option for referenced content.
+
+    Ranked with ts_rank over a weighted document so a title match outranks a
+    description mention, rather than ordering by date and hoping.
+    """
+    pool = require_pool()
+
+    rows = await pool.fetch(
+        f"""
+        SELECT {VIDEO_COLUMNS},
+               ts_rank(
+                 setweight(to_tsvector('english', v.title), 'A') ||
+                 setweight(to_tsvector('english', coalesce(v.description, '')), 'C') ||
+                 setweight(to_tsvector('english', c.name), 'B'),
+                 websearch_to_tsquery('english', $1)
+               ) AS rank
+        {VIDEO_JOINS}
+        WHERE v.visibility = 'public'
+          AND (
+            setweight(to_tsvector('english', v.title), 'A') ||
+            setweight(to_tsvector('english', coalesce(v.description, '')), 'C') ||
+            setweight(to_tsvector('english', c.name), 'B')
+          ) @@ websearch_to_tsquery('english', $1)
+        ORDER BY rank DESC, v.published_at DESC
+        LIMIT $2
+        """,
+        q,
+        limit,
+    )
+
+    return {
+        "query": q,
+        "items": [serialise(row) for row in rows],
+        # §11: semantic search degrades to keyword-only, flagged in the UI. It
+        # is flagged from the very first version rather than being added when
+        # the semantic path exists.
+        "mode": "keyword",
+    }
+
+
 @router.get("/videos/{video_id}")
 async def video_detail(video_id: UUID) -> dict[str, object]:
     pool = require_pool()

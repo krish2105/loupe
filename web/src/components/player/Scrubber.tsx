@@ -101,7 +101,7 @@ export function Scrubber({ chapters = [], marks = [], className }: Props) {
             {/* scaleX, not width — §7.3 allows transform and opacity only. */}
             <div
               aria-hidden="true"
-              className="absolute inset-0 origin-left bg-screen"
+              className="absolute inset-0 origin-left bg-ink"
               style={{ transform: `scaleX(${progress})` }}
             />
           </div>
@@ -114,7 +114,7 @@ export function Scrubber({ chapters = [], marks = [], className }: Props) {
         <span
           key={mark}
           aria-hidden="true"
-          className="absolute top-1/2 h-3 w-[2px] -translate-y-1/2 bg-citrine"
+          className="absolute top-1/2 h-3 w-[2px] -translate-y-1/2 bg-brand"
           style={{ left: `${Math.min(100, (mark / duration) * 100)}%` }}
         />
       ))}

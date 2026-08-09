@@ -15,7 +15,7 @@ export function Description({ text }: { text: string }) {
   const isLong = text.length > 220;
 
   return (
-    <div className="rounded-(--radius-md) bg-riser p-4">
+    <div className="rounded-(--radius-md) bg-surface p-4">
       <p
         className={cn(
           "whitespace-pre-line text-pretty text-(length:--step--1)",
@@ -29,7 +29,7 @@ export function Description({ text }: { text: string }) {
         <button
           type="button"
           onClick={() => setExpanded((value) => !value)}
-          className="mt-2 text-(length:--step--1) font-medium text-dust hover:text-screen"
+          className="mt-2 text-(length:--step--1) font-medium text-muted hover:text-ink"
         >
           {expanded ? "Show less" : "Show more"}
         </button>

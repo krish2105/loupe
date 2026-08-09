@@ -17,14 +17,14 @@ function SignedOut({ title }: { title: string }) {
   return (
     <div className="mx-auto max-w-[46ch] py-24 text-center">
       <h1 className="text-(length:--step-3)">{title}</h1>
-      <p className="mt-3 text-pretty text-(length:--step--1) text-dust">
+      <p className="mt-3 text-pretty text-(length:--step--1) text-muted">
         This is yours, so it needs an account.
       </p>
       <Link
         href="/login"
         className={cn(
-          "mt-6 inline-block rounded-(--radius-sm) bg-screen px-4 py-2",
-          "text-(length:--step--1) font-medium text-hall hover:opacity-90",
+          "mt-6 inline-block rounded-(--radius-sm) bg-ink px-4 py-2",
+          "text-(length:--step--1) font-medium text-canvas hover:opacity-90",
         )}
       >
         Sign in
@@ -50,11 +50,11 @@ function ResumeBar({ context, duration }: { context: CollectionItem["context"]; 
       <div className="h-[3px] w-full overflow-hidden rounded-(--radius-none) bg-rule">
         <div
           aria-hidden="true"
-          className="h-full origin-left bg-screen"
+          className="h-full origin-left bg-ink"
           style={{ transform: `scaleX(${progress})` }}
         />
       </div>
-      <p className="mt-1.5 font-mono text-(length:--step--2) text-dust">
+      <p className="mt-1.5 font-mono text-(length:--step--2) text-muted">
         {context.completed
           ? "Finished"
           : `Stopped at ${formatTimecode(context.position_sec)}`}
@@ -91,7 +91,7 @@ export function CollectionSurface({
       {items.length === 0 ? (
         <div className="mx-auto max-w-[46ch] py-24 text-center">
           <p className="text-(length:--step-1)">{emptyTitle}</p>
-          <p className="mt-2 text-pretty text-(length:--step--1) text-dust">
+          <p className="mt-2 text-pretty text-(length:--step--1) text-muted">
             {emptyBody}
           </p>
         </div>

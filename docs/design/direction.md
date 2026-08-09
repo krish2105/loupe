@@ -1,5 +1,13 @@
 # Loupe — design direction
 
+> **Superseded in part by [ADR 0002](../adr/0002-visual-identity.md).** The
+> palette, the token names, and the "chrome is achromatic" system rule below
+> were replaced by a red-and-white identity with mainstream video-platform
+> layout. Typography, the type scale, the radius scale, the motion policy, and
+> the accessibility floor still stand. This document is kept because the
+> reasoning it records is what ADR 0002 is a decision *against* — deleting it
+> would leave the reversal looking uncontested.
+
 Produced per plan §7.1 before any component existed, and locked. §18.3 freezes
 the system at the week-4 gate; until then, changes are recorded here.
 

@@ -6,10 +6,11 @@ Search *inside* a talk, ask it questions and get answers that cite the exact
 moment, and land on that moment with one click. Built on an owned catalogue,
 because transcripts are what every interesting feature here depends on.
 
-> **Status: Phase 2 of 11.** The catalogue is browsable, talks play adaptively,
-> and comments work. The semantic layer this project exists for — search inside,
-> ask-video, chapters — is Phase 6 and does not exist yet. The search field is
-> present but does nothing. See [gate status](#gate-status).
+> **Status: Phase 3 of 11.** The catalogue is browsable, talks play adaptively,
+> comments work, and the four identity surfaces are live. Keyword search works;
+> the semantic layer this project exists for — searching *inside* talks,
+> ask-video, chapters — is Phase 6 and does not exist yet. See
+> [gate status](#gate-status).
 
 ---
 
@@ -96,16 +97,19 @@ signed, so swapping providers touches one directory.
 
 ## Design
 
-Dark-first, with a light theme designed independently rather than inverted —
-dark's referent is a dimmed auditorium, light's is a lit surface, and they are
-deliberately opposite in temperature.
+Red and white, with mainstream video-platform layout: a top bar with centred
+search, an expanded sidebar carrying sections and subscribed channels, a dense
+thumbnail grid. Both themes are designed to equal weight.
 
-One system rule does most of the work: **chrome is achromatic, and colour means
-the machine found something.** Buttons, links, navigation, and focus rings are
-built entirely from neutrals. The single accent appears only on the semantic
-layer — transcript matches, citation marks, the AI-ready state.
+This reverses the plan's original position, which argued for an original visual
+identity over a familiar feature set. That reversal is deliberate and recorded
+in [ADR 0002](docs/adr/0002-visual-identity.md), along with what it costs and
+the one thing it does not touch: no third-party trademark, logo, or brand colour
+is reproduced. Loupe keeps its own wordmark.
 
-Full direction in [`docs/design/direction.md`](docs/design/direction.md).
+The superseded direction is kept in
+[`docs/design/direction.md`](docs/design/direction.md) rather than deleted, so
+the decision reads as contested rather than assumed.
 
 ## Gate status
 
@@ -170,10 +174,14 @@ Recorded as they are incurred, per the working agreement.
 - **Comment posting has never completed.** The endpoint is tested against a real
   Postgres including the one-reply-level limit, but the browser path needs a
   signed-in session, which needs Supabase.
-- **Search does nothing.** The field is present because it is the product's
-  thesis and belongs in the layout from the start; semantic search is Phase 6.
-- **Thumbnails are generated placeholders**, not frames. Real ones arrive with
-  the media provider.
+- **Search matches titles and descriptions only.** Full-text ranking over
+  titles, descriptions, and channel names — which is all Class B content can
+  ever support. Searching *inside* transcripts is Phase 6, and the results page
+  says so rather than implying otherwise.
+- **Thumbnails are stock photographs, not frames from the talks.** They are
+  keyed to the talk id so each talk always shows the same image, but they have
+  nothing to do with its content. Real frames arrive when the media provider
+  generates sprite sheets.
 - **Performance targets are unmeasured.** LCP under 2.5s and player
   time-to-first-frame under 1.5s need a deployed API to test against.
 

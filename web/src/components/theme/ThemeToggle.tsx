@@ -42,7 +42,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       title="Switch between light and dark"
       className={cn(
         "grid size-9 place-items-center rounded-(--radius-sm)",
-        "text-dust transition-colors hover:text-screen",
+        "text-muted transition-colors hover:text-ink",
         className,
       )}
     >

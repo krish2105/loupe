@@ -21,14 +21,14 @@ function ApiUnavailable() {
         <h1 className="text-(length:--step-4)">No talks yet</h1>
       </Reveal>
       <Reveal delay={0.06}>
-        <p className="mt-4 text-pretty text-(length:--step-1) text-dust">
+        <p className="mt-4 text-pretty text-(length:--step-1) text-muted">
           Talks appear here newest first as they finish indexing. A talk becomes
           watchable long before it becomes searchable.
         </p>
       </Reveal>
       <Reveal delay={0.12}>
-        <div className="mt-10 rounded-(--radius-md) border border-rule bg-riser p-5">
-          <p className="text-(length:--step--1) text-dust">
+        <div className="mt-10 rounded-(--radius-md) border border-rule bg-surface p-5">
+          <p className="text-(length:--step--1) text-muted">
             <MarkNode /> <span className="ml-1" />
             marks a talk you can search inside. Ask it a question and the answer
             cites the exact moment, like{" "}
@@ -67,20 +67,22 @@ export default async function HomePage({
       {items.length === 0 ? (
         <div className="mt-16 text-center">
           <p className="text-(length:--step-1)">Nothing indexed yet</p>
-          <p className="mx-auto mt-2 max-w-[46ch] text-pretty text-(length:--step--1) text-dust">
+          <p className="mx-auto mt-2 max-w-[46ch] text-pretty text-(length:--step--1) text-muted">
             Talks become searchable once transcription and indexing finish.
             Everything in the catalogue is still watchable in the meantime.
           </p>
         </div>
       ) : (
         <div
-          className="mt-6 grid gap-x-4 gap-y-8"
+          className="grid gap-x-4 gap-y-9 pb-8"
           style={{
-            gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
           }}
         >
-          {items.map((video) => (
-            <VideoCard key={video.id} video={video} />
+          {items.map((video, index) => (
+            // The first row is above the fold; lazy-loading it would show the
+            // largest visible images last.
+            <VideoCard key={video.id} video={video} priority={index < 4} />
           ))}
         </div>
       )}

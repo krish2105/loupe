@@ -2,90 +2,87 @@
 
 /* ===========================================================================
    Loupe — design tokens
-   Referent: a dimmed auditorium (dark) and a lit surface (light).
 
-   The system rule, which matters more than any single value:
-   CHROME IS ACHROMATIC. Colour means "the machine found this."
-   Buttons, links, nav, focus rings are built from screen/dust/rule only.
-   `citrine` appears on the semantic layer and nowhere else — transcript
-   matches, citation marks, chapter boundaries, the AI-ready state.
-   A reader learns the mapping in seconds and never unlearns it.
-   Plan ref: §7.2 (exactly one accent, boldness spent in one place).
+   Red-and-white identity with mainstream video-platform layout conventions.
+   This replaces the auditorium system; the reversal, what it costs, and what
+   it preserves are recorded in docs/adr/0002-visual-identity.md.
+
+   The old rule — "chrome is achromatic, colour means the machine found
+   something" — is retired. Red now means "interactive", which is the
+   convention this identity is adopting on purpose. The Mark keeps its meaning
+   through form (a stroke with a node) rather than through being the only
+   coloured object.
+
+   Both themes are designed to equal weight. Neither is a derivative.
    =========================================================================== */
 
-/* Dark is the primary theme (§7.2) but light is designed independently, not
-   inverted: dark's referent is a warm room, light's is a cool lit surface.
-   They are deliberately opposite in temperature. */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 :root,
 [data-theme="light"] {
   color-scheme: light;
 
-  --hall: #f6f7f9;   /* canvas */
-  --riser: #ffffff;  /* elevated: cards, sheets, player chrome */
-  --rule: #e3e5ea;   /* borders, dividers, scrubber track */
-  --dust: #5e636b;   /* secondary text, metadata, timecodes */
-  --screen: #14161a; /* primary text */
+  --canvas: #ffffff;
+  --surface: #f7f7f8; /* cards, menus, elevated chrome */
+  --rule: #e3e3e5;
+  --muted: #5f6368; /* secondary text — 6.1:1 on canvas */
+  --ink: #0f0f10; /* primary text — 19:1 on canvas */
 
-  /* In light the Mark is a GROUND — a highlighter wash behind near-black text.
-     Same gesture as dark's stroke, different physics. */
-  --citrine: #6e5f12;
-  --citrine-ground: #f4ea6b;
-  --citrine-faint: #faf4c4;
+  --brand: #cc0000; /* 5.8:1 on white, so it is legible as text, not only as fill */
+  --brand-ground: rgb(204 0 0 / 0.1);
+  --brand-faint: rgb(204 0 0 / 0.05);
 
-  /* Deliberately dull, so it never competes with citrine for attention.
-     Errors are not the loudest thing on the page. */
-  --danger: #9b3b2f;
+  /* Amber, not red. With red as the brand, a red error state would make one
+     colour mean both "primary action" and "something is wrong". */
+  --danger: #8a5300;
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
 
-  --hall: #14110e;   /* warm brown-black — the dimmed auditorium, not blue-black */
-  --riser: #1e1a17;
-  --rule: #2e2823;
-  --dust: #9a9187;
-  --screen: #f4f0e9; /* the projection screen: warm off-white, never pure white */
+  --canvas: #0f0f0f;
+  --surface: #1f1f1f;
+  --rule: #303030;
+  --muted: #a9a9ad; /* 9.0:1 on canvas */
+  --ink: #f2f2f3; /* 17.7:1 on canvas */
 
-  /* In dark the Mark is a STROKE. */
-  --citrine: #e2d45e;
-  --citrine-ground: rgb(226 212 94 / 0.16);
-  --citrine-faint: rgb(226 212 94 / 0.08);
+  /* Lifted and desaturated from the light value: #cc0000 on near-black is
+     muddy and fails contrast at text sizes. */
+  --brand: #ff4d4d; /* 6.0:1 on canvas */
+  --brand-ground: rgb(255 77 77 / 0.16);
+  --brand-faint: rgb(255 77 77 / 0.08);
 
-  --danger: #c8756b;
+  --danger: #ffb86b;
 }
 
 @theme inline {
-  --color-hall: var(--hall);
-  --color-riser: var(--riser);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
   --color-rule: var(--rule);
-  --color-dust: var(--dust);
-  --color-screen: var(--screen);
-  --color-citrine: var(--citrine);
-  --color-citrine-ground: var(--citrine-ground);
-  --color-citrine-faint: var(--citrine-faint);
+  --color-muted: var(--muted);
+  --color-ink: var(--ink);
+  --color-brand: var(--brand);
+  --color-brand-ground: var(--brand-ground);
+  --color-brand-faint: var(--brand-faint);
   --color-danger: var(--danger);
 
   --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, monospace;
 
-  /* Radius is a four-step scale, not one value applied everywhere.
-     0 for the scrubber (a timeline has square ends), 4 for marks and chips,
-     10 for cards and sheets, pill for the search capsule. */
+  /* Four steps: 0 for the scrubber, 4 for chips and marks, 10 for cards and
+     sheets, pill for search and buttons. */
   --radius-none: 0px;
   --radius-sm: 4px;
-  --radius-md: 10px;
+  --radius-md: 12px;
   --radius-pill: 999px;
 }
 
-/* Fluid type (§7.2): clamp() across all breakpoints, no jumps at a media query.
-   Ratio opens from 1.20 at 360px to 1.25 at 1440px. */
 :root {
-  --step--2: clamp(0.69rem, 0.67rem + 0.11vw, 0.75rem); /* timecodes, micro-labels */
-  --step--1: clamp(0.81rem, 0.78rem + 0.16vw, 0.89rem); /* captions, metadata */
-  --step-0: clamp(0.94rem, 0.9rem + 0.21vw, 1.05rem); /* body */
+  /* Fluid type — clamp() across all breakpoints, no jumps at a media query. */
+  --step--2: clamp(0.69rem, 0.67rem + 0.11vw, 0.75rem);
+  --step--1: clamp(0.81rem, 0.78rem + 0.16vw, 0.89rem);
+  --step-0: clamp(0.94rem, 0.9rem + 0.21vw, 1.05rem);
   --step-1: clamp(1.13rem, 1.06rem + 0.31vw, 1.31rem);
   --step-2: clamp(1.35rem, 1.24rem + 0.47vw, 1.64rem);
   --step-3: clamp(1.62rem, 1.45rem + 0.71vw, 2.05rem);
@@ -94,57 +91,72 @@
 
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
-  --rail-width: 56px;
+  --topbar-height: 56px;
+  --sidebar-width: 240px;
+  --rail-width: 72px;
 }
 
 @layer base {
   html {
-    /* Transitioning colour on the root would repaint the whole tree on every
-       theme change. The toggle disables transitions during the swap instead
-       (see ThemeScript), so this stays cheap. */
-    background-color: var(--hall);
-    color: var(--screen);
+    background-color: var(--canvas);
+    color: var(--ink);
   }
 
   body {
-    background-color: var(--hall);
-    color: var(--screen);
+    background-color: var(--canvas);
+    color: var(--ink);
     font-family: var(--font-sans);
     font-size: var(--step-0);
-    line-height: 1.55;
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
   }
 
-  /* Display face used with restraint (§7.1): headings only, never below 20px.
-     `wdth` is the reason this face was chosen — width is magnification, which
-     is what the product's name means. */
   h1,
   h2,
   h3 {
     font-family: var(--font-display);
     font-variation-settings: "wdth" 100;
-    line-height: 1.1;
+    line-height: 1.15;
     letter-spacing: -0.015em;
     text-wrap: balance;
   }
 
-  /* Achromatic focus ring: visible, and it never borrows the accent, because
-     the accent means something else. */
+  /* The focus ring uses the brand now that the brand is the interactive
+     colour, and keeps a contrasting outer edge so it stays visible on
+     brand-coloured fills. */
   :focus-visible {
-    outline: 2px solid var(--screen);
+    outline: 2px solid var(--brand);
     outline-offset: 2px;
     border-radius: var(--radius-sm);
   }
 
   ::selection {
-    background: var(--citrine-ground);
-    color: var(--screen);
+    background: var(--brand-ground);
+    color: var(--ink);
+  }
+
+  /* Thin scrollbars on the sidebar and chip row, which both scroll. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--rule) transparent;
   }
 }
 
-/* The single most important accessibility line in the file (§7.3, §7.7):
-   every motion is gated, and content stays fully usable without it. */
+@layer utilities {
+  /* Horizontal scrollers (chip row, shelves) keep their scroll but drop the
+     bar, which would otherwise sit across the content. */
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* The single most important accessibility line in the file (§7.3, §7.7).
+   Every motion added for this identity is gated behind it. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

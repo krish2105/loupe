@@ -34,7 +34,7 @@ export function MarkNode({
       aria-label={label}
       aria-hidden={label ? undefined : true}
     >
-      <span className="block size-[5px] rounded-full bg-citrine" />
+      <span className="block size-[5px] rounded-full bg-brand" />
     </span>
   );
 }
@@ -60,12 +60,12 @@ export function MarkUnderline({
         // `mark` carries its own browser styling; reset it and rebuild.
         "bg-transparent text-inherit",
         // Dark: a 2px stroke under the phrase.
-        "[background-image:linear-gradient(var(--citrine),var(--citrine))]",
+        "[background-image:linear-gradient(var(--brand),var(--brand))]",
         "[background-size:100%_2px] [background-repeat:no-repeat]",
         "[background-position:0_calc(100%-1px)]",
         // Light: the stroke fills into a ground behind the text.
         "dark:[background-size:100%_2px]",
-        "[&:where([data-theme=light]_*)]:bg-citrine-ground",
+        "[&:where([data-theme=light]_*)]:bg-brand-ground",
         "[&:where([data-theme=light]_*)]:[background-image:none]",
         "[&:where([data-theme=light]_*)]:rounded-[2px]",
         "[&:where([data-theme=light]_*)]:box-decoration-clone",

@@ -129,10 +129,10 @@ export function VideoPlayer({
 
       {status === "error" && (
         <div className="absolute inset-0 grid place-content-center px-6 text-center">
-          <p className="text-(length:--step-0) text-screen">
+          <p className="text-(length:--step-0) text-ink">
             This talk will not play in your browser.
           </p>
-          <p className="mt-2 text-(length:--step--1) text-dust">
+          <p className="mt-2 text-(length:--step--1) text-muted">
             The stream could not be loaded. Try reloading, or open it in a
             different browser.
           </p>
@@ -143,8 +143,8 @@ export function VideoPlayer({
       {resumeOffer !== null && isReady && (
         // z-20 puts it above the controls, whose gradient would otherwise wash
         // the notice out — which it did until this was set.
-        <div className="absolute bottom-20 left-3 z-20 flex items-center gap-3 rounded-(--radius-md) border border-rule bg-riser px-3 py-2">
-          <p className="text-(length:--step--1) text-screen">
+        <div className="absolute bottom-20 left-3 z-20 flex items-center gap-3 rounded-(--radius-md) border border-rule bg-surface px-3 py-2">
+          <p className="text-(length:--step--1) text-ink">
             Pick up at {formatTimecode(resumeOffer)}?
           </p>
           <button
@@ -154,8 +154,8 @@ export function VideoPlayer({
               setResumeOffer(null);
             }}
             className={cn(
-              "rounded-(--radius-sm) bg-screen px-2.5 py-1",
-              "text-(length:--step--2) font-medium text-hall",
+              "rounded-(--radius-sm) bg-ink px-2.5 py-1",
+              "text-(length:--step--2) font-medium text-canvas",
             )}
           >
             Resume
@@ -164,7 +164,7 @@ export function VideoPlayer({
             type="button"
             onClick={() => setResumeOffer(null)}
             aria-label="Start from the beginning"
-            className="text-(length:--step--2) text-dust hover:text-screen"
+            className="text-(length:--step--2) text-muted hover:text-ink"
           >
             Start over
           </button>

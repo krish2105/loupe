@@ -44,9 +44,9 @@ export async function generateMetadata({
  */
 function ReferencedPlayback() {
   return (
-    <div className="grid aspect-video w-full place-content-center rounded-(--radius-md) border border-rule bg-riser px-6 text-center">
+    <div className="grid aspect-video w-full place-content-center rounded-(--radius-md) border border-rule bg-surface px-6 text-center">
       <p className="text-(length:--step-0)">Plays at the original source</p>
-      <p className="mx-auto mt-2 max-w-[44ch] text-pretty text-(length:--step--1) text-dust">
+      <p className="mx-auto mt-2 max-w-[44ch] text-pretty text-(length:--step--1) text-muted">
         Loupe lists this talk but does not host it, so playback happens on the
         original platform.
       </p>
@@ -56,9 +56,9 @@ function ReferencedPlayback() {
 
 function ProcessingPlayback() {
   return (
-    <div className="grid aspect-video w-full place-content-center rounded-(--radius-md) border border-rule bg-riser px-6 text-center">
+    <div className="grid aspect-video w-full place-content-center rounded-(--radius-md) border border-rule bg-surface px-6 text-center">
       <p className="text-(length:--step-0)">Still processing</p>
-      <p className="mx-auto mt-2 max-w-[44ch] text-pretty text-(length:--step--1) text-dust">
+      <p className="mx-auto mt-2 max-w-[44ch] text-pretty text-(length:--step--1) text-muted">
         This talk is being prepared for playback. It will appear here shortly.
       </p>
     </div>
@@ -89,7 +89,7 @@ export default async function WatchPage({
   const aiPanel = <AiPanel video={video} />;
   const relatedRail = (
     <section aria-labelledby="related-heading">
-      <h2 id="related-heading" className="text-(length:--step--1) font-medium text-dust">
+      <h2 id="related-heading" className="text-(length:--step--1) font-medium text-muted">
         More talks
       </h2>
       <div className="mt-4 space-y-4">
@@ -131,7 +131,7 @@ export default async function WatchPage({
 
           <h1 className="mt-5 text-(length:--step-3)">{video.title}</h1>
 
-          <p className="mt-2 text-(length:--step--1) text-dust">
+          <p className="mt-2 text-(length:--step--1) text-muted">
             {formatViews(video.view_count)} ·{" "}
             {formatAge(video.published_at)}
           </p>
@@ -140,18 +140,18 @@ export default async function WatchPage({
           <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-4 border-y border-rule py-4">
             <span
               aria-hidden="true"
-              className="grid size-10 shrink-0 place-items-center rounded-full border border-rule bg-riser font-mono text-(length:--step--1) text-dust"
+              className="grid size-10 shrink-0 place-items-center rounded-full border border-rule bg-surface font-mono text-(length:--step--1) text-muted"
             >
               {video.channel.name.slice(0, 1)}
             </span>
             <div className="min-w-0">
               <Link
                 href={`/c/${video.channel.handle}`}
-                className="block truncate text-(length:--step-0) font-medium hover:text-dust"
+                className="block truncate text-(length:--step-0) font-medium hover:text-muted"
               >
                 {video.channel.name}
               </Link>
-              <p className="text-(length:--step--2) text-dust">
+              <p className="text-(length:--step--2) text-muted">
                 @{video.channel.handle}
               </p>
             </div>

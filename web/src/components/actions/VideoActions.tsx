@@ -48,8 +48,8 @@ function ToggleButton({
         "inline-flex items-center gap-2 rounded-(--radius-pill) border px-3.5 py-1.5",
         "text-(length:--step--1) transition-colors",
         active
-          ? "border-screen bg-screen text-hall"
-          : "border-rule bg-riser text-dust hover:text-screen",
+          ? "border-ink bg-ink text-canvas"
+          : "border-rule bg-surface text-muted hover:text-ink",
       )}
     >
       {icon}

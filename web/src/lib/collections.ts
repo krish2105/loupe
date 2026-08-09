@@ -70,6 +70,16 @@ export type VideoState = {
 export const getVideoState = (videoId: string, token: string | null) =>
   authed<VideoState>(`/v1/me/state/${videoId}`, token);
 
+export type SubscribedChannel = {
+  id: string;
+  handle: string;
+  name: string;
+  avatar_url: string | null;
+};
+
+export const getSubscribedChannels = (token: string | null) =>
+  authed<{ items: SubscribedChannel[] }>("/v1/me/channels", token);
+
 export const getPlaylists = (token: string | null) =>
   authed<{ items: PlaylistSummary[] }>("/v1/me/playlists", token);
 

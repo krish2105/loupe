@@ -31,7 +31,7 @@ function Panel({
       aria-label="About this talk"
       className={cn(
         "rounded-(--radius-md) border border-rule p-4",
-        muted ? "bg-transparent" : "bg-riser",
+        muted ? "bg-transparent" : "bg-surface",
       )}
     >
       <h2 className="flex items-center gap-2 text-(length:--step--1) font-medium">
@@ -49,12 +49,12 @@ export function AiPanel({ video }: { video: VideoDetail }) {
   if (video.source_class === "referenced") {
     return (
       <Panel title="Not searchable" muted>
-        <p className="text-pretty text-(length:--step--1) text-dust">
+        <p className="text-pretty text-(length:--step--1) text-muted">
           This talk is listed from its original source, so Loupe holds its
           details but not its transcript. Searching inside and asking questions
           work only on talks in the indexed library.
         </p>
-        <p className="mt-3 text-pretty text-(length:--step--2) text-dust">
+        <p className="mt-3 text-pretty text-(length:--step--2) text-muted">
           Look for the <MarkNode /> mark to find talks you can search inside.
         </p>
       </Panel>
@@ -67,11 +67,11 @@ export function AiPanel({ video }: { video: VideoDetail }) {
   if (video.capabilities.processing) {
     return (
       <Panel title="Indexing" muted>
-        <p className="text-pretty text-(length:--step--1) text-dust">
+        <p className="text-pretty text-(length:--step--1) text-muted">
           This talk is watchable now. Searching inside it and asking it
           questions become available once transcription and indexing finish.
         </p>
-        <p className="mt-3 font-mono text-(length:--step--2) text-dust">
+        <p className="mt-3 font-mono text-(length:--step--2) text-muted">
           stage: {video.processing_status}
         </p>
       </Panel>
@@ -86,7 +86,7 @@ export function AiPanel({ video }: { video: VideoDetail }) {
         </>
       }
     >
-      <p className="text-pretty text-(length:--step--1) text-dust">
+      <p className="text-pretty text-(length:--step--1) text-muted">
         No summary has been generated for this talk yet. When one exists it
         appears here with key points you can click to jump to.
       </p>

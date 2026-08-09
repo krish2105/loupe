@@ -33,14 +33,14 @@ export default async function ChannelPage({
       <header className="flex flex-wrap items-center gap-4 border-b border-rule pb-6">
         <span
           aria-hidden="true"
-          className="grid size-16 shrink-0 place-items-center rounded-full border border-rule bg-riser font-display text-(length:--step-2) text-dust"
+          className="grid size-16 shrink-0 place-items-center rounded-full border border-rule bg-surface font-display text-(length:--step-2) text-muted"
         >
           {channel.name.slice(0, 1)}
         </span>
 
         <div className="min-w-0">
           <h1 className="text-(length:--step-3)">{channel.name}</h1>
-          <p className="mt-1 text-(length:--step--1) text-dust">
+          <p className="mt-1 text-(length:--step--1) text-muted">
             @{channel.handle} · {videos.length} talk
             {videos.length === 1 ? "" : "s"}
             {/* Say how much of this channel is searchable, because on a
@@ -52,13 +52,13 @@ export default async function ChannelPage({
       </header>
 
       {channel.description && (
-        <p className="mt-5 max-w-[70ch] text-pretty text-(length:--step-0) text-dust">
+        <p className="mt-5 max-w-[70ch] text-pretty text-(length:--step-0) text-muted">
           {channel.description}
         </p>
       )}
 
       {videos.length === 0 ? (
-        <p className="mt-16 text-center text-(length:--step--1) text-dust">
+        <p className="mt-16 text-center text-(length:--step--1) text-muted">
           This channel has no talks yet.
         </p>
       ) : (
