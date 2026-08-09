@@ -155,3 +155,20 @@ in use, the fallback is a pale ice-blue.
 
 - The original plan claimed a **three**-step radius scale (0/4/10). The search
   capsule needs a pill radius, making it four. Recorded rather than glossed.
+- The slide-placeholder thumbnail was first drawn in `riser`, which measured
+  **1.15:1** against the canvas — the thumbnails were effectively invisible and
+  the grid read as flat, which is fatal when §7.2 makes the grid the design.
+  Rebuilt from `screen` at varying alpha so the projected screen emits. No new
+  token; the six still hold.
+
+---
+
+## Freeze
+
+§18.3 and the Phase 2 gate lock the system here: **no new colours, type scales,
+or spacing values after this point.** The six tokens, three faces, eight type
+steps, and four radii above are the whole vocabulary for the remaining phases.
+
+Anything that feels like it needs a new value is a signal that an existing one
+is being used wrongly. Changing this list later requires an explicit recorded
+decision, the same as §18.7 demands for the exclusion list.

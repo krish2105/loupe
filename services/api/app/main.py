@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from . import db
 from .auth import require_user_id
 from .config import settings
+from .routers import catalogue, comments
 
 """
 Loupe core API.
@@ -39,6 +40,9 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+app.include_router(catalogue.router)
+app.include_router(comments.router)
 
 
 @app.get("/health")

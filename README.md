@@ -39,6 +39,7 @@ constraints reject it. See [`db/tests/constraints.sql`](db/tests/constraints.sql
 | Area | State |
 |---|---|
 | Database schema | All §6 entities, 7 migrations, 19 constraint assertions passing |
+| Catalogue | Home feed, video page, channel page, comments — browsable |
 | Design system | Six tokens, two independently designed themes, visible at `/system` |
 | Player | Adaptive HLS, chapter-segmented scrubber, §9.1 keyboard, resume |
 | Player abstraction | Seek/play/pause/time store, verified against a real stream |
@@ -49,7 +50,16 @@ constraints reject it. See [`db/tests/constraints.sql`](db/tests/constraints.sql
 | CI | Web, API, media, and schema jobs |
 | Staging deploy | Live at [web-jade-two-b023n56l0y.vercel.app](https://web-jade-two-b023n56l0y.vercel.app) |
 
-Test counts: 22 web, 14 API, 12 media, 19 schema assertions.
+Test counts: 22 web, 28 API, 12 media, 19 schema assertions.
+
+Seed a browsable catalogue locally with:
+
+```bash
+psql "$DATABASE_URL" -f db/seed/0001_demo_catalogue.sql
+```
+
+That gives 9 owned talks (6 indexed, 3 mid-pipeline) and 48 referenced ones —
+roughly the §4.1 shape of a real platform with an indexing backlog.
 
 ## Running it
 

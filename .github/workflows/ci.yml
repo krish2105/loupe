@@ -108,6 +108,12 @@ jobs:
         # Re-running must be a no-op. §5.1 makes idempotency an architectural
         # rule; a migration runner that breaks on second run contradicts it.
         run: ./db/migrate.sh
+      - name: Seed applies
+        # The seed is how anyone gets a browsable catalogue locally, so a
+        # broken one blocks every new contributor on their first afternoon.
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/seed/0001_demo_catalogue.sql
+      - name: Seed is idempotent
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/seed/0001_demo_catalogue.sql
       - name: Constraint tests
         # Fails the build if any PASS line is missing or any FAIL appears.
         run: |

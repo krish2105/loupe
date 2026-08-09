@@ -98,4 +98,70 @@ async def seeded(client):
             await connection.execute("DELETE FROM channels WHERE id = $1", channel_id)
 
 
+@pytest.fixture
+async def referenced_video(client):
+    """A Class B video: metadata only, no transcript, no playback."""
+    pool = db.pool()
+    if pool is None:
+        pytest.skip("No database available")
+
+    channel_id = uuid.uuid4()
+    video_id = uuid.uuid4()
+
+    async with pool.acquire() as connection:
+        await connection.execute(
+            """
+            INSERT INTO channels (id, handle, name, source_class, external_id)
+            VALUES ($1, $2, 'Referenced Channel', 'referenced', $3)
+            """,
+            channel_id,
+            f"rch-{channel_id.hex[:8]}",
+            f"ext-{channel_id.hex[:8]}",
+        )
+        await connection.execute(
+            """
+            INSERT INTO videos
+                (id, source_class, channel_id, title, processing_status, external_id)
+            VALUES ($1, 'referenced', $2, 'A referenced talk', 'referenced_only', $3)
+            """,
+            video_id,
+            channel_id,
+            f"extv-{video_id.hex[:8]}",
+        )
+
+    yield video_id
+
+    async with pool.acquire() as connection:
+        await connection.execute("DELETE FROM videos WHERE id = $1", video_id)
+        await connection.execute("DELETE FROM channels WHERE id = $1", channel_id)
+
+
+@pytest.fixture
+async def processing_video(seeded):
+    """
+    An owned talk that has been transcoded but not yet indexed.
+
+    §5.1: watchable long before it is searchable. Without a fixture in this
+    state the partial-availability path is never exercised.
+    """
+    pool = db.pool()
+    video_id = uuid.uuid4()
+
+    async with pool.acquire() as connection:
+        await connection.execute(
+            """
+            INSERT INTO videos
+                (id, source_class, channel_id, title, processing_status)
+            VALUES ($1, 'owned', $2, 'Still processing', 'transcribed')
+            """,
+            video_id,
+            seeded["channel_id"],
+        )
+
+    yield video_id
+
+    async with pool.acquire() as connection:
+        await connection.execute("DELETE FROM videos WHERE id = $1", video_id)
+
+
 __all__ = ["asyncpg", "token_for", "seeded", "client"]
