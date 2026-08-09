@@ -22,9 +22,13 @@ import { cn } from "@/lib/utils";
 type NavItem = { href: string; label: string; icon: RailIconName };
 
 // Named by what the person controls, never by how the system is built (§7.6).
+//
+// Shorts is deliberately absent. It was listed here from Phase 0 and pointed at
+// a route that did not exist, so every visitor who clicked it got a 404 — a
+// nav item is a promise, and one that 404s is worse than one that is missing.
+// It returns when Phase 8 builds the vertical feed.
 const NAV: NavItem[] = [
   { href: "/", label: "Home", icon: "home" },
-  { href: "/shorts", label: "Shorts", icon: "shorts" },
   { href: "/subscriptions", label: "Subscriptions", icon: "subscriptions" },
   { href: "/history", label: "History", icon: "history" },
   { href: "/saved", label: "Watch later", icon: "saved" },

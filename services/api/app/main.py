@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from . import db
 from .auth import require_user_id
 from .config import settings
-from .routers import catalogue, comments
+from .routers import catalogue, collections, comments
 
 """
 Loupe core API.
@@ -42,6 +42,7 @@ app = FastAPI(
 )
 
 app.include_router(catalogue.router)
+app.include_router(collections.router)
 app.include_router(comments.router)
 
 

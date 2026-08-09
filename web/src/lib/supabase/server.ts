@@ -33,6 +33,21 @@ export async function createClient() {
   });
 }
 
+/**
+ * The access token to forward to the core API, or null.
+ *
+ * getSession() is the right call here, unlike for authorisation: this token is
+ * not being trusted, only relayed. The API verifies it against the Supabase
+ * JWT secret before acting on it, so a forged cookie buys nothing.
+ */
+export async function getAccessToken(): Promise<string | null> {
+  const supabase = await createClient();
+  if (!supabase) return null;
+
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? null;
+}
+
 /** The signed-in user, or null. Never throws. */
 export async function getCurrentUser() {
   const supabase = await createClient();

@@ -7,8 +7,10 @@ import { Description } from "@/components/content/Description";
 import { VideoCard } from "@/components/content/VideoCard";
 import { PlayerProvider } from "@/components/player/PlayerContext";
 import { VideoPlayer } from "@/components/player/VideoPlayer";
+import { VideoActions } from "@/components/actions/VideoActions";
 import { getComments, getRelated, getVideo } from "@/lib/catalogue";
-import { getCurrentUser } from "@/lib/supabase/server";
+import { getVideoState } from "@/lib/collections";
+import { getAccessToken, getCurrentUser } from "@/lib/supabase/server";
 import { formatAge, formatViews } from "@/lib/utils";
 
 /**
@@ -70,11 +72,14 @@ export default async function WatchPage({
 }) {
   const { id } = await params;
 
-  const [video, related, comments, user] = await Promise.all([
+  const token = await getAccessToken();
+
+  const [video, related, comments, user, state] = await Promise.all([
     getVideo(id),
     getRelated(id, 8),
     getComments(id),
     getCurrentUser(),
+    getVideoState(id, token),
   ]);
 
   if (!video) notFound();
@@ -131,8 +136,8 @@ export default async function WatchPage({
             {formatAge(video.published_at)}
           </p>
 
-          {/* Channel strip */}
-          <div className="mt-5 flex items-center gap-3 border-y border-rule py-4">
+          {/* Channel strip and action bar (§9) */}
+          <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-4 border-y border-rule py-4">
             <span
               aria-hidden="true"
               className="grid size-10 shrink-0 place-items-center rounded-full border border-rule bg-riser font-mono text-(length:--step--1) text-dust"
@@ -149,6 +154,15 @@ export default async function WatchPage({
               <p className="text-(length:--step--2) text-dust">
                 @{video.channel.handle}
               </p>
+            </div>
+
+            <div className="ml-auto">
+              <VideoActions
+                videoId={video.id}
+                channelId={video.channel.id}
+                initialState={state}
+                isSignedIn={Boolean(user)}
+              />
             </div>
           </div>
 

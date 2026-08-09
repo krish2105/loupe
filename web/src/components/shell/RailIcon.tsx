@@ -8,6 +8,8 @@
 
 export type RailIconName =
   | "home"
+  // Not in the rail today — the Shorts route arrives in Phase 8. Kept rather
+  // than deleted and re-drawn, but it is not currently rendered anywhere.
   | "shorts"
   | "subscriptions"
   | "history"
