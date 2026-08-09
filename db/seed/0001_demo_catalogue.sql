@@ -15,10 +15,26 @@
 
 BEGIN;
 
--- Every Class A row points at Apple's public reference HLS stream. Real assets
--- arrive when Bunny is provisioned; until then this is what makes the player
+-- Every Class A row points at a public reference HLS stream. Real assets arrive
+-- when Bunny is provisioned; until then this is what makes the player
 -- exercisable end to end.
-\set demo_hls '''https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8'''
+--
+-- Not Apple's img_bipbop_adv_example_fmp4, which this used to be. That stream
+-- serves `Access-Control-Allow-Origin` inconsistently: some edges hold cached
+-- copies of the `a1/` audio and `v9/` video renditions with no CORS header at
+-- all, while `v2/` on the same edge is fine. Which renditions are broken
+-- depends on where you are, so it works from one network and fails from
+-- another.
+--
+-- That failure is invisible on Safari and iOS, because native HLS fetches
+-- segments outside the page's CORS path. It shows up only under hls.js, which
+-- loads every rendition by XHR from the page and so needs the header on all of
+-- them. The stream therefore looked fine to anyone testing on a Mac and was
+-- broken for every Chrome user.
+--
+-- Mux's test stream is the one hls.js itself demos against, on a different CDN,
+-- and 635s long, which covers every moment seeded below.
+\set demo_hls '''https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8'''
 
 -- ------------------------------------------------------------- channels ---
 INSERT INTO channels (id, handle, name, description, source_class, external_id) VALUES
@@ -106,6 +122,17 @@ FROM videos v
 WHERE v.source_class = 'owned'
   AND v.processing_status NOT IN ('uploaded', 'transcoding')
 ON CONFLICT (video_id) DO NOTHING;
+
+-- `DO NOTHING` keeps a re-run from clobbering rows, which is right for
+-- everything above and wrong for exactly this column: when the reference stream
+-- has to change — as it did when Apple's demo turned out to serve CORS headers
+-- on only some renditions — a database seeded earlier keeps the dead URL and
+-- re-running the seed appears to do nothing. So the fixture URL is repaired
+-- rather than merely inserted.
+--
+-- `provider = 'demo'` is the guard. A real Bunny asset is never touched.
+UPDATE video_assets SET hls_url = :demo_hls
+WHERE provider = 'demo' AND hls_url IS DISTINCT FROM :demo_hls;
 
 -- --------------------------------------------- Class B — referenced feed ---
 -- Breadth. Generated rather than hand-written, because the point of Class B is

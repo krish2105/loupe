@@ -23,7 +23,10 @@
 
 BEGIN;
 
-\set demo_hls '''https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8'''
+-- The same reference stream as 0001, and see that file for why it is Mux's
+-- rather than Apple's: the Apple demo serves CORS headers on only some of
+-- its renditions from some edges, which breaks hls.js and nothing else.
+\set demo_hls '''https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8'''
 
 -- Shows are channels. A podcast has a show, episodes in order, and publication
 -- dates, which is exactly what channels and videos already are.
