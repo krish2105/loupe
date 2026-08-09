@@ -43,8 +43,8 @@ constraints reject it. See [`db/tests/constraints.sql`](db/tests/constraints.sql
 | Player abstraction | Seek/play/pause/time store with 8 passing tests |
 | Auth | Supabase Auth wired; **unverified — needs provisioning** |
 | Core API | FastAPI skeleton, health and pipeline-stage endpoints |
-| CI | Web, API, and schema jobs |
-| Staging deploy | **Not done** |
+| CI | Web, API, and schema jobs — all green |
+| Staging deploy | Live at [web-jade-two-b023n56l0y.vercel.app](https://web-jade-two-b023n56l0y.vercel.app) |
 
 ## Running it
 
@@ -92,13 +92,31 @@ Full direction in [`docs/design/direction.md`](docs/design/direction.md).
 
 The gate is: *a logged-in user sees an empty shell on a public URL.*
 
-**PARTIAL.** The shell is built and the auth code path is complete, but neither
-half of the gate is verified, because Supabase and Vercel are not provisioned.
-Local development runs against Homebrew Postgres — this machine has no Docker,
-so `supabase start` is unavailable.
+**PARTIAL — two of three clauses met.**
 
-To close it: create a Supabase project, paste two keys into `web/.env.local`,
-apply `db/migrations/supabase/0001_auth_link.sql`, and deploy to Vercel.
+| Clause | State |
+|---|---|
+| Public URL | **Met.** <https://web-jade-two-b023n56l0y.vercel.app> returns 200 on `/`, `/login`, and `/system` |
+| Empty shell | **Met.** Rail, search capsule, empty state, both themes |
+| Logged-in user | **Not met.** No Supabase project, so no sign-in has ever succeeded |
+
+The auth code path is complete and builds, but complete is not the same as
+verified, and nothing here should claim a round-trip that has not happened.
+Local development runs against Homebrew Postgres because this machine has no
+Docker, which rules out `supabase start`.
+
+**To close it** (about ten minutes):
+
+1. Create a free Supabase project.
+2. Put `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in
+   `web/.env.local`, and add both to the Vercel project's environment.
+3. Apply the schema to it:
+   ```bash
+   DATABASE_URL="<supabase pooler url>" ./db/migrate.sh
+   psql "$DATABASE_URL" -f db/migrations/supabase/0001_auth_link.sql
+   ```
+4. Redeploy, sign up, and confirm the shell renders with the account control
+   showing the signed-in initial.
 
 ## Limitations
 

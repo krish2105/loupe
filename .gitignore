@@ -44,3 +44,6 @@ coverage/
 .vercel
 .idea/
 .vscode/
+
+# Vercel CLI link metadata
+web/.vercel/
