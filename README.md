@@ -107,8 +107,8 @@ Full reasoning, including what the split costs:
 | CI | Nine jobs: web, API, AI, eval, recsys, media, ingest, pipeline, schema |
 | Staging deploy | Live at [web-jade-two-b023n56l0y.vercel.app](https://web-jade-two-b023n56l0y.vercel.app) |
 
-Test counts: 44 web, 76 API, 46 AI, 40 eval, 43 recsys, 12 media, 19 ingest,
-49 pipeline, 21 schema assertions. **349 in total**, all green in CI across nine
+Test counts: 44 web, 76 API, 53 AI, 40 eval, 43 recsys, 12 media, 19 ingest,
+49 pipeline, 21 schema assertions. **357 in total**, all green in CI across nine
 jobs.
 
 Seed a browsable catalogue locally with:
