@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from . import db
 from .auth import require_user_id
 from .config import settings
-from .routers import catalogue, collections, comments
+from .routers import catalogue, collections, comments, studio
 
 """
 Loupe core API.
@@ -56,6 +56,7 @@ app.add_middleware(
 app.include_router(catalogue.router)
 app.include_router(collections.router)
 app.include_router(comments.router)
+app.include_router(studio.router)
 
 
 @app.get("/health")

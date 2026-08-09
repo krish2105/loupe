@@ -2,6 +2,8 @@
 
 import { useRef, useState } from "react";
 import { Icon } from "@/components/shell/Icon";
+import { API_URL } from "@/lib/api";
+import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import {
   fileProblem,
@@ -76,15 +78,54 @@ export default function UploadPage() {
       return;
     }
 
+    const supabase = createClient();
+    const token = supabase
+      ? (await supabase.auth.getSession()).data.session?.access_token
+      : null;
+
+    if (!token) {
+      setError("Sign in to upload a talk.");
+      return;
+    }
+
     setPending(true);
+    setStatus("Creating the talk…");
+
+    /**
+     * The row comes first, and it comes from the core API rather than from
+     * here. §5 keeps `videos` the core API's to write, and the media service
+     * issues a ticket *against* an id — this page used to invent one with
+     * `crypto.randomUUID()`, which could never satisfy the foreign key, so the
+     * upload died at the first request every time.
+     */
+    const created = await fetch(`${API_URL}/v1/videos`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ title }),
+    }).catch(() => null);
+
+    if (!created?.ok) {
+      reset();
+      setStatus(null);
+      const body = created ? await created.json().catch(() => null) : null;
+      setError(
+        body?.detail ??
+          `Could not create the talk. The API answered ${created?.status ?? "nothing"}.`,
+      );
+      return;
+    }
+
+    const { id: videoId } = (await created.json()) as { id: string };
+
     setStatus("Asking for an upload ticket…");
 
     const ticketResponse = await fetch(`${MEDIA_URL}/v1/uploads`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      // video_id comes from the core API in the full flow; this page is the
-      // provider half, so it is supplied by whatever created the row.
-      body: JSON.stringify({ video_id: crypto.randomUUID(), title }),
+      body: JSON.stringify({ video_id: videoId, title }),
     }).catch(() => null);
 
     if (!ticketResponse) {
@@ -150,7 +191,8 @@ export default function UploadPage() {
       reset();
       if (xhr.status >= 200 && xhr.status < 300) {
         setStatus(
-          "Uploaded. Loupe is transcoding it now — it becomes watchable first, then searchable once the transcript is indexed.",
+          "Uploaded, and private until you publish it. Loupe is transcoding it now — " +
+            "it becomes watchable first, then searchable once the transcript is indexed.",
         );
         setFile(null);
         setTitle("");
