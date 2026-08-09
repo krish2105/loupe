@@ -6,7 +6,7 @@ Search *inside* a talk, ask it questions and get answers that cite the exact
 moment, and land on that moment with one click. Built on an owned catalogue,
 because transcripts are what every interesting feature here depends on.
 
-> **Status: Phase 6 of 11.** The catalogue is browsable, talks play adaptively,
+> **Status: Phase 7 of 11.** The catalogue is browsable, talks play adaptively,
 > comments work, and the four identity surfaces are live. Keyword search works;
 > the semantic layer this project exists for — searching *inside* talks,
 > ask-video, chapters — is Phase 6 and does not exist yet. See
@@ -45,6 +45,7 @@ constraints reject it. See [`db/tests/constraints.sql`](db/tests/constraints.sql
 | Ingest worker | Nightly sync, quota ledger, fails closed, idempotent |
 | Pipeline | Stage machine, normalise, chunk, embed, chapter detection |
 | AI layer | Semantic search, ask-video with refusal, summaries with timestamps |
+| Evaluation | Harness, tested metrics, golden set — **no benchmark yet, deliberately** |
 | Design system | Six tokens, two independently designed themes, visible at `/system` |
 | Player | Adaptive HLS, chapter-segmented scrubber, §9.1 keyboard, resume |
 | Player abstraction | Seek/play/pause/time store, verified against a real stream |
@@ -55,7 +56,7 @@ constraints reject it. See [`db/tests/constraints.sql`](db/tests/constraints.sql
 | CI | Web, API, media, and schema jobs |
 | Staging deploy | Live at [web-jade-two-b023n56l0y.vercel.app](https://web-jade-two-b023n56l0y.vercel.app) |
 
-Test counts: 22 web, 55 API, 31 AI, 12 media, 19 ingest, 49 pipeline, 19 schema assertions.
+Test counts: 22 web, 55 API, 31 AI, 40 eval, 12 media, 19 ingest, 49 pipeline, 19 schema assertions.
 
 Seed a browsable catalogue locally with:
 
@@ -93,6 +94,7 @@ services/ingest/  Nightly referenced-content sync, quota accounting
 services/pipeline/ Transcription, chunking, embedding, chapter detection
 services/ai/      Summarising, ask-video, semantic search — the only service
                   that holds a model key or contains a prompt
+services/eval/    Golden set, metrics, and the evaluation runner
 db/               SQL migrations, constraint tests, migration runner
 docs/             Plan, decisions, ADRs, design direction
 ```
@@ -159,6 +161,37 @@ Docker, which rules out `supabase start`.
    ```
 4. Redeploy, sign up, and confirm the shell renders with the account control
    showing the signed-in initial.
+
+## Evaluation
+
+**There is no benchmark yet, and that is deliberate.**
+
+The harness, the metrics, and a hand-labelled golden set all exist and run. The
+corpus does not deserve a benchmark: the owned talks point at a test stream
+with no speech, so the transcripts are fixture output. Numbers computed over
+invented transcripts would be arithmetically correct, would look exactly like a
+benchmark, and would mean nothing.
+
+What the harness did find, on its first run over the fixture corpus:
+
+```
+refusal accuracy    0.792      adversarial category   4/8
+false answer rate   0.357  ←   out_of_scope           5/6
+citation accuracy   0.600      factual               10/10
+```
+
+Five of fourteen questions that should have been refused were answered, and the
+failures concentrate in the adversarial category — domain-adjacent questions
+that sound like the talk but are not in it. §11.1 names this precise failure
+mode and the harness found it immediately.
+
+A threshold sweep shows 0.50 would score a perfect 1.000 on this set. **It has
+not been adopted**, because picking the value that maximises a 24-case fixture
+score is fitting the threshold to the fixture — the published number would
+improve and the product would be no more trustworthy.
+
+Full results, methodology, and what would make this a real benchmark:
+[`docs/evaluation.md`](docs/evaluation.md).
 
 ## Limitations
 

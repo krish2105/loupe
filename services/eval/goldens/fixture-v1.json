@@ -1,0 +1,218 @@
+{
+  "version": "fixture-v1",
+  "corpus": "fixture",
+  "note": [
+    "Authored against the FIXTURE transcripts, not real speech. The owned",
+    "catalogue points at a test stream with no audio, so the pipeline ran a",
+    "fixture transcriber and these questions were written by reading its",
+    "output.",
+    "",
+    "What this set can and cannot measure:",
+    "",
+    "  MEANINGFUL — refusal accuracy. An out-of-scope question is out of scope",
+    "  whatever the corpus, so the refuse/answer decision is genuinely under",
+    "  test.",
+    "",
+    "  MEANINGFUL — citation timestamp accuracy. The expected timestamps are",
+    "  read from the actual chunk boundaries, so this measures whether a",
+    "  citation lands on the moment it claims. That is the §11.1 property the",
+    "  whole layer's credibility rests on, and it is corpus-independent.",
+    "",
+    "  PARTIALLY MEANINGFUL — retrieval precision. Questions paraphrase rather",
+    "  than quote the transcript, so retrieval must do semantic work. But the",
+    "  fixture vocabulary is small and repetitive, which makes it easier than",
+    "  real speech.",
+    "",
+    "  NOT MEANINGFUL — cross-video comparison. Every fixture transcript is",
+    "  identical, so there is nothing to compare across talks. The category is",
+    "  present and empty rather than filled with cases that would score well",
+    "  and prove nothing.",
+    "",
+    "  ABSENT — non-English, per §17 decision 3 (English only).",
+    "",
+    "This set becomes invalid the moment real transcripts are loaded. The",
+    "runner enforces that rather than trusting anyone to remember."
+  ],
+  "cases": [
+    {
+      "id": "f01",
+      "category": "factual",
+      "question": "what becomes the bottleneck before compute does",
+      "should_refuse": false,
+      "expected_start_sec": 1150.0,
+      "note": "Paraphrases 'memory bandwidth becomes the limit long before arithmetic does'."
+    },
+    {
+      "id": "f02",
+      "category": "factual",
+      "question": "why does buying a faster accelerator not help",
+      "should_refuse": false,
+      "expected_start_sec": 1150.0,
+      "note": "The speaker makes this point in the bandwidth section."
+    },
+    {
+      "id": "f03",
+      "category": "factual",
+      "question": "how does attention cost grow with sequence length",
+      "should_refuse": false,
+      "expected_start_sec": 444.0,
+      "note": "Quadratic scaling, in the attention section."
+    },
+    {
+      "id": "f04",
+      "category": "factual",
+      "question": "what is stored between decoding steps to avoid recomputation",
+      "should_refuse": false,
+      "expected_start_sec": 1613.0,
+      "note": "Keys and values, in the caching section."
+    },
+    {
+      "id": "f05",
+      "category": "factual",
+      "question": "what does paged attention change",
+      "should_refuse": false,
+      "expected_start_sec": 1613.0,
+      "note": "The contiguous allocation requirement."
+    },
+    {
+      "id": "f06",
+      "category": "factual",
+      "question": "how are requests admitted into a running batch",
+      "should_refuse": false,
+      "expected_start_sec": 2089.0,
+      "note": "Continuous batching section."
+    },
+    {
+      "id": "f07",
+      "category": "factual",
+      "question": "what happens to tail latency with continuous batching",
+      "should_refuse": false,
+      "expected_start_sec": 2089.0,
+      "note": "Stated directly in the batching section."
+    },
+    {
+      "id": "f08",
+      "category": "factual",
+      "question": "what does a roofline plot show about the kernel",
+      "should_refuse": false,
+      "expected_start_sec": 1150.0,
+      "note": "Bandwidth bound almost everywhere."
+    },
+    {
+      "id": "f09",
+      "category": "factual",
+      "question": "does benchmark behaviour match production",
+      "should_refuse": false,
+      "expected_start_sec": 0.0,
+      "note": "The opening claim."
+    },
+    {
+      "id": "f10",
+      "category": "factual",
+      "question": "where does the crossover point move with batch size",
+      "should_refuse": false,
+      "expected_start_sec": 444.0,
+      "note": "Attention section."
+    },
+
+    {
+      "id": "o01",
+      "category": "out_of_scope",
+      "question": "what is the best recipe for sourdough bread",
+      "should_refuse": true,
+      "note": "Nothing to do with the talk."
+    },
+    {
+      "id": "o02",
+      "category": "out_of_scope",
+      "question": "who won the 1998 world cup",
+      "should_refuse": true,
+      "note": "Nothing to do with the talk."
+    },
+    {
+      "id": "o03",
+      "category": "out_of_scope",
+      "question": "how do I renew a UK passport",
+      "should_refuse": true,
+      "note": "Nothing to do with the talk."
+    },
+    {
+      "id": "o04",
+      "category": "out_of_scope",
+      "question": "what is the capital of Peru",
+      "should_refuse": true,
+      "note": "General knowledge the model may know but the talk does not contain."
+    },
+    {
+      "id": "o05",
+      "category": "out_of_scope",
+      "question": "explain the offside rule",
+      "should_refuse": true,
+      "note": "Nothing to do with the talk."
+    },
+    {
+      "id": "o06",
+      "category": "out_of_scope",
+      "question": "what did the speaker have for breakfast",
+      "should_refuse": true,
+      "note": "Plausibly about the speaker, absent from the transcript."
+    },
+
+    {
+      "id": "a01",
+      "category": "adversarial",
+      "question": "what does the speaker say about training on TPUs",
+      "should_refuse": true,
+      "note": "Same domain, never mentioned. The failure mode is answering from adjacent knowledge."
+    },
+    {
+      "id": "a02",
+      "category": "adversarial",
+      "question": "which optimiser does the speaker recommend",
+      "should_refuse": true,
+      "note": "Domain-adjacent and absent. A model would happily invent Adam."
+    },
+    {
+      "id": "a03",
+      "category": "adversarial",
+      "question": "what learning rate schedule is suggested",
+      "should_refuse": true,
+      "note": "Sounds like a talk about training; this is a serving talk."
+    },
+    {
+      "id": "a04",
+      "category": "adversarial",
+      "question": "how many parameters does the model have",
+      "should_refuse": true,
+      "note": "A specific number the transcript never gives."
+    },
+    {
+      "id": "a05",
+      "category": "adversarial",
+      "question": "what dataset was used for pretraining",
+      "should_refuse": true,
+      "note": "Domain-adjacent and absent."
+    },
+    {
+      "id": "a06",
+      "category": "adversarial",
+      "question": "what is the speaker's opinion on open weights",
+      "should_refuse": true,
+      "note": "Opinion the transcript does not express."
+    },
+    {
+      "id": "a07",
+      "category": "adversarial",
+      "question": "how much did the training run cost",
+      "should_refuse": true,
+      "note": "A figure the transcript never states."
+    },
+    {
+      "id": "a08",
+      "category": "adversarial",
+      "question": "which cloud provider is recommended",
+      "should_refuse": true,
+      "note": "Plausible for the domain, absent from the talk."
+    }
+  ]
+}

@@ -100,6 +100,24 @@ jobs:
       - run: uv run ruff check .
       - run: uv run pytest -q
 
+  eval:
+    name: Eval
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/eval
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-groups
+      - run: uv run ruff check .
+      # Metrics and the golden-set contract are pure. The scoring run itself
+      # needs a live AI service and is not part of CI — a benchmark that only
+      # ever runs in CI is a benchmark nobody reads.
+      - run: uv run pytest -q
+
   pipeline:
     name: Pipeline
     runs-on: ubuntu-latest
