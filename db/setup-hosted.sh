@@ -54,13 +54,55 @@ FAILED
 fi
 echo "     ok"
 
-echo "2/4  enabling pgvector"
-if psql_quiet -c "CREATE EXTENSION IF NOT EXISTS vector" >/dev/null 2>&1; then
-  echo "     ok"
-else
-  # Some plans do not allow creating it over the wire. The dashboard always can.
-  echo "     could not create it from here — enable it in the dashboard under" >&2
-  echo "     Database → Extensions → vector, then run this again." >&2
+echo "2/4  extensions"
+# Both of the ones migration 0001 needs. Checked together rather than letting
+# the second one fail at step 3, after the first has already succeeded — a
+# half-applied setup is worse to reason about than one that stopped.
+missing=()
+for extension in vector pgcrypto; do
+  if psql_quiet --tuples-only --no-align \
+       -c "SELECT 1 FROM pg_extension WHERE extname = '$extension'" 2>/dev/null | grep -q 1; then
+    echo "     $extension already enabled"
+    continue
+  fi
+
+  # Two spellings. Supabase keeps extensions in a dedicated schema and some
+  # projects refuse the bare form; trying both is cheaper than asking someone to
+  # work out which kind of project they have.
+  if psql "$URL" -v ON_ERROR_STOP=1 --quiet --no-psqlrc \
+       -c "CREATE EXTENSION IF NOT EXISTS $extension WITH SCHEMA extensions" >/dev/null 2>&1 \
+     || psql "$URL" -v ON_ERROR_STOP=1 --quiet --no-psqlrc \
+       -c "CREATE EXTENSION IF NOT EXISTS $extension" >/dev/null 2>&1; then
+    echo "     $extension enabled"
+  else
+    echo "     $extension could not be enabled from here"
+    missing+=("$extension")
+  fi
+done
+
+if (( ${#missing[@]} )); then
+  # The real message, once, rather than a guess. Hiding this is what made the
+  # first version of this script useless at the one moment it mattered.
+  echo >&2
+  echo "     Postgres said, for ${missing[0]}:" >&2
+  psql "$URL" -v ON_ERROR_STOP=1 --quiet --no-psqlrc \
+    -c "CREATE EXTENSION IF NOT EXISTS ${missing[0]}" 2>&1 | sed 's/^/       /' >&2
+
+  cat >&2 <<FIX
+
+     Enable ${missing[*]} in the dashboard instead. Newer projects do not let
+     the connection role create extensions:
+
+       Database → Extensions → search the name → toggle on
+
+     or in the SQL editor:
+
+FIX
+  for extension in "${missing[@]}"; do
+    echo "       create extension if not exists $extension with schema extensions;" >&2
+  done
+  echo >&2
+  echo "     Then run this script again. It skips whatever is already enabled." >&2
   exit 1
 fi
 
