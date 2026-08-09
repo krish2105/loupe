@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     #: worker. Not by discipline — by code."
     transcription_minutes_cap: int = 3000
 
+    #: Where the media service lives, and the shared secret it expects. The
+    #: transcoder holds no bucket credentials of its own — it asks the media
+    #: service to sign each URL, which is what keeps §5's "sole holder" true.
+    media_service_url: str = "http://localhost:8002"
+    internal_token: str = ""
+
     batch_size: int = 20
     max_retries: int = 3
 

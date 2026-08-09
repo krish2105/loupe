@@ -98,7 +98,7 @@ async def run_once(pool) -> dict:
 
     report: dict[str, int] = {"requeued": await requeue_failed(pool, settings.max_retries)}
 
-    for name in ("transcribe", "chunk", "embed", "enrich"):
+    for name in ("transcode", "transcribe", "chunk", "embed", "enrich"):
         step = STEPS_BY_NAME[name]
         rows = await eligible(pool, step, settings.batch_size)
         outcomes: dict[str, int] = {}
@@ -120,7 +120,9 @@ async def run_once(pool) -> dict:
                     break
 
             async def work(video_id=video_id, name=name):
-                if name == "transcribe":
+                if name == "transcode":
+                    await worker.transcode_video(pool, video_id)
+                elif name == "transcribe":
                     await worker.transcribe(pool, video_id, transcriber)
                 elif name == "chunk":
                     await worker.chunk(pool, video_id)

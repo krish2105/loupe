@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     # it is regenerated on every fetch, so there is no benefit to a long one.
     s3_segment_ttl_sec: int = 60 * 60
 
+    # Shared secret for /v1/internal/sign, which lets the transcoder get
+    # bucket URLs without holding provider keys of its own. Empty means the
+    # endpoint 404s — absent rather than guessable.
+    internal_token: str = ""
+
     # Origins allowed to call this service from a page. Same shape as the core
     # API's, comma-separated, because two services with the same job should not
     # be configured two different ways.

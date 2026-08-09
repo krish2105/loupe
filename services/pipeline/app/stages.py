@@ -49,6 +49,11 @@ class Step:
 
 
 STEPS: list[Step] = [
+    # The transition this machine has documented since it was written, with
+    # nothing behind it until now: transcoding was Bunny's job and Bunny was
+    # never provisioned, so every video in the catalogue arrived already
+    # `transcoded` from a fixture.
+    Step("transcode", "uploaded", "transcoding", "transcoded", "failed_transcoding"),
     Step("transcribe", "transcoded", "transcribing", "transcribed", "failed_transcribing"),
     Step("chunk", "transcribed", "chunking", "embedding", "failed_chunking"),
     # Chunked-but-not-embedded parks at `embedding`, so the embed step is

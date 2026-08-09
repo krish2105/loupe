@@ -37,6 +37,11 @@ def _sign(key: str, ttl: int, method: str = "GET") -> str:
     )
 
 
+def sign_key(key: str, ttl: int, method: str = "GET") -> str:
+    """Sign an arbitrary key. Used by /v1/internal/sign for the transcoder."""
+    return _sign(key, ttl, method=method)
+
+
 def upload_url(video_id: str, filename: str, ttl: int) -> str:
     """
     A presigned PUT the browser can send the file straight to.

@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from uuid import UUID
 
 from asyncpg.exceptions import ForeignKeyViolationError
-from fastapi import FastAPI, HTTPException, Path, Response
+from fastapi import FastAPI, Header, HTTPException, Path, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -188,6 +188,60 @@ async def create_upload(request: UploadRequest) -> UploadTicket:
         ),
         expires_at=expires_at,
     )
+
+
+class SignRequest(BaseModel):
+    key: str
+    method: str = "GET"
+    expires_in: int = 3600
+
+
+@app.post("/v1/internal/sign")
+async def sign_object(
+    request: SignRequest,
+    authorization: str | None = Header(default=None),
+) -> dict[str, str]:
+    """
+    Sign one bucket URL for another service.
+
+    The transcoder needs to read a source and write renditions, and there are
+    only three ways it can: hold the credentials itself, import this service's
+    signing code, or ask. It asks.
+
+    Holding them would put provider keys in a second service and make §5's
+    "sole holder" claim false. Importing would either duplicate SigV4 — two
+    implementations of a signature is two things to get subtly wrong, and the
+    second always drifts — or need a path dependency, which cannot work here
+    because both packages expose a top-level `app` module.
+
+    Not public. `INTERNAL_TOKEN` gates it, compared in constant time, and
+    without one configured the endpoint does not exist at all rather than
+    defaulting to something guessable. An open version of this would hand
+    anyone a write URL for any key in the bucket.
+    """
+    if not settings.internal_token:
+        raise HTTPException(status_code=404, detail="Not found.")
+
+    presented = (authorization or "").removeprefix("Bearer ").strip()
+    if not secrets.compare_digest(presented, settings.internal_token):
+        raise HTTPException(status_code=401, detail="Not authorised.")
+
+    if settings.provider != "s3":
+        raise HTTPException(status_code=409, detail="No S3 provider configured.")
+
+    if not playlist.is_safe_path(request.key):
+        raise HTTPException(status_code=400, detail="Invalid key.")
+
+    if request.method not in {"GET", "PUT"}:
+        raise HTTPException(status_code=400, detail="Only GET and PUT are signed.")
+
+    return {
+        "url": storage.sign_key(
+            request.key,
+            ttl=min(request.expires_in, 6 * 60 * 60),
+            method=request.method,
+        )
+    }
 
 
 @app.get("/v1/playback/{video_id}")

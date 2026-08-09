@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 
+from . import media_store, transcode
 from .asr import Transcriber
 from .chapters import build_chapters, find_boundaries
 from .chunk import Word, chunk_words
 from .embed import Embedder
 from .naming import HeuristicNamer
 from .normalise import display, normalise
+from .stages import StepFailed
 
 """
 The step implementations.
@@ -20,6 +23,70 @@ in the right place automatically.
 """
 
 logger = logging.getLogger("pipeline")
+
+
+async def transcode_video(pool, video_id) -> None:
+    """
+    Turn the uploaded file into an HLS ladder.
+
+    The first step of the machine and the one that had no implementation: this
+    was Bunny's job, and Bunny was never provisioned, so every video in the
+    catalogue arrived already `transcoded` pointing at a fixture stream.
+
+    Writes `hls_url` and `duration_sec`. The duration is worth noting — it is
+    the first time the catalogue has held a number that describes the actual
+    file rather than a seeded guess, and the mismatch between the two is
+    visible today on every card.
+    """
+    row = await pool.fetchrow(
+        "SELECT provider, provider_guid FROM video_assets WHERE video_id = $1",
+        video_id,
+    )
+    if row is None or row["provider"] != "s3":
+        raise StepFailed("no S3 asset row for this video")
+
+    if not transcode.ffmpeg_available():
+        raise StepFailed(
+            "ffmpeg and ffprobe are not on this machine, so nothing can be "
+            "transcoded here. Install them, or run the worker somewhere they are."
+        )
+
+    guid = row["provider_guid"]
+
+    with transcode.workspace() as directory:
+        workspace = Path(directory)
+        source = workspace / "source"
+        output = workspace / "hls"
+        output.mkdir()
+
+        await media_store.download(f"videos/{guid}/source/original", source)
+        rungs, duration = await transcode.transcode_to_hls(source, output)
+        await media_store.upload_tree(output, f"videos/{guid}/hls")
+
+    async with pool.acquire() as connection:
+        await connection.execute(
+            """
+            UPDATE video_assets
+            SET hls_url = $2,
+                resolutions = $3::jsonb
+            WHERE video_id = $1
+            """,
+            video_id,
+            f"videos/{guid}/hls/master.m3u8",
+            json.dumps([{"height": rung.height} for rung in rungs]),
+        )
+        # Only when it is known. A duration of zero would be worse than the
+        # seeded guess it replaces.
+        if duration > 0:
+            await connection.execute(
+                "UPDATE videos SET duration_sec = $2 WHERE id = $1",
+                video_id,
+                int(round(duration)),
+            )
+
+    logger.info(
+        "transcoded %s into %s", video_id, ", ".join(rung.name for rung in rungs)
+    )
 
 
 async def transcribe(pool, video_id, transcriber: Transcriber) -> None:
