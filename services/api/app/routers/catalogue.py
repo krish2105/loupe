@@ -156,6 +156,43 @@ async def feed(
     return {"items": items, "next_cursor": next_cursor}
 
 
+@router.get("/shorts")
+async def shorts(limit: int = Query(12, ge=1, le=30)) -> dict[str, object]:
+    """
+    The vertical feed (§3.1, §13).
+
+    Returns the playback URL with each item rather than making the client fetch
+    it per video. §13 requires preloading the next two manifests, and a feed
+    that had to make a round-trip before it could preload would defeat the
+    point of preloading.
+
+    The limit is low on purpose. A vertical feed is scrolled, not paged, and
+    handing the client thirty items means thirty rows of metadata for two that
+    will be watched.
+    """
+    pool = require_pool()
+
+    rows = await pool.fetch(
+        f"""
+        SELECT {VIDEO_COLUMNS}, a.hls_url
+        {VIDEO_JOINS}
+        LEFT JOIN video_assets a ON a.video_id = v.id
+        WHERE v.is_short AND v.visibility = 'public'
+        ORDER BY v.published_at DESC NULLS LAST, v.id DESC
+        LIMIT $1
+        """,
+        limit,
+    )
+
+    items = []
+    for row in rows:
+        payload = serialise(row)
+        payload["hls_url"] = row["hls_url"]
+        items.append(payload)
+
+    return {"items": items}
+
+
 @router.get("/search")
 async def search(
     q: str = Query(..., min_length=1, max_length=200),

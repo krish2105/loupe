@@ -6,7 +6,7 @@ Search *inside* a talk, ask it questions and get answers that cite the exact
 moment, and land on that moment with one click. Built on an owned catalogue,
 because transcripts are what every interesting feature here depends on.
 
-> **Status: Phase 7 of 11.** The catalogue is browsable, talks play adaptively,
+> **Status: Phase 8 of 11.** The catalogue is browsable, talks play adaptively,
 > comments work, and the four identity surfaces are live. Keyword search works;
 > the semantic layer this project exists for — searching *inside* talks,
 > ask-video, chapters — is Phase 6 and does not exist yet. See
@@ -46,6 +46,7 @@ constraints reject it. See [`db/tests/constraints.sql`](db/tests/constraints.sql
 | Pipeline | Stage machine, normalise, chunk, embed, chapter detection |
 | AI layer | Semantic search, ask-video with refusal, summaries with timestamps |
 | Evaluation | Harness, tested metrics, golden set — **no benchmark yet, deliberately** |
+| Shorts | Vertical snap feed, window policy tested — **playback unverified** |
 | Design system | Six tokens, two independently designed themes, visible at `/system` |
 | Player | Adaptive HLS, chapter-segmented scrubber, §9.1 keyboard, resume |
 | Player abstraction | Seek/play/pause/time store, verified against a real stream |
@@ -56,7 +57,7 @@ constraints reject it. See [`db/tests/constraints.sql`](db/tests/constraints.sql
 | CI | Web, API, media, and schema jobs |
 | Staging deploy | Live at [web-jade-two-b023n56l0y.vercel.app](https://web-jade-two-b023n56l0y.vercel.app) |
 
-Test counts: 22 web, 55 API, 31 AI, 40 eval, 12 media, 19 ingest, 49 pipeline, 19 schema assertions.
+Test counts: 44 web, 55 API, 31 AI, 40 eval, 12 media, 19 ingest, 49 pipeline, 21 schema assertions.
 
 Seed a browsable catalogue locally with:
 
@@ -211,6 +212,16 @@ Recorded as they are incurred, per the working agreement.
 - **Progress writes have not run end to end.** The endpoints are tested against
   a real Postgres and the throttling logic is tested in isolation, but the
   browser has never sent one, because that needs a signed-in session.
+- **The shorts feed has never been seen playing.** The window policy §13
+  specifies — active plus two ahead loading, destroy beyond ±3 — is proven by
+  16 unit tests, and the API and layout are verified. But the browser available
+  for verification fires no scroll events and no IntersectionObserver
+  callbacks, so scroll-driven activation could not be exercised at all, and the
+  gate ("no stutter on a mid-range Android") needs hardware this project does
+  not have. Both are open.
+- **Shorts media is 16:9, not vertical.** The feed is built for 9:16 and the
+  player crops to fill, which is what a real client does with mismatched
+  aspect — but these are not genuinely vertical videos.
 - **Comment posting has never completed.** The endpoint is tested against a real
   Postgres including the one-reply-level limit, but the browser path needs a
   signed-in session, which needs Supabase.

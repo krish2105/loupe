@@ -254,4 +254,4 @@ jobs:
           echo "$output" | grep -q "FAIL" && exit 1
           count=$(echo "$output" | grep -c "PASS")
           echo "$count constraint assertions passed"
-          [ "$count" -ge 19 ] || { echo "expected at least 19 assertions"; exit 1; }
+          [ "$count" -ge 21 ] || { echo "expected at least 21 assertions"; exit 1; }

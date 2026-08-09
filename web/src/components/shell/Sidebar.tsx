@@ -29,6 +29,9 @@ type Item = { href: string; label: string; icon: IconName };
 
 const PRIMARY: Item[] = [
   { href: "/", label: "Home", icon: "home" },
+  // Back, now that the route exists. It was removed in Phase 3 because it had
+  // pointed at a 404 since Phase 0 — a nav item is a promise.
+  { href: "/shorts", label: "Shorts", icon: "shorts" },
   { href: "/subscriptions", label: "Subscriptions", icon: "subscriptions" },
 ];
 

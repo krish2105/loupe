@@ -22,7 +22,9 @@ export type IconName =
   | "mic"
   | "user"
   | "chevronRight"
-  | "shorts";
+  | "shorts"
+  | "volume"
+  | "muted";
 
 const PATHS: Record<IconName, React.ReactNode> = {
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
@@ -86,6 +88,18 @@ const PATHS: Record<IconName, React.ReactNode> = {
     <>
       <rect x="7" y="2.5" width="10" height="19" rx="4" />
       <path d="M10.8 9.2 15 12l-4.2 2.8z" />
+    </>
+  ),
+  volume: (
+    <>
+      <path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4z" />
+      <path d="M15.5 9.5a3.5 3.5 0 0 1 0 5M18 7a7 7 0 0 1 0 10" />
+    </>
+  ),
+  muted: (
+    <>
+      <path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4z" />
+      <path d="m16 9.5 5 5M21 9.5l-5 5" />
     </>
   ),
 };

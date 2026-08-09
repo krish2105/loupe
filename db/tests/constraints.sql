@@ -76,6 +76,19 @@ SELECT assert_accepts($$
   VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'en', 'whisperx', '3.1.1', 'the real text')
 $$, '§4  Class A can hold a transcript');
 
+-- ------------------------------------------ §13 — shorts are playable ---
+-- A vertical feed autoplays. Class B content cannot be played by Loupe at all,
+-- so a referenced short would be an unplayable card in an autoplaying feed.
+SELECT assert_rejects($$
+  UPDATE videos SET is_short = true
+  WHERE id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
+$$, '§13  a referenced video cannot be a short');
+
+SELECT assert_accepts($$
+  UPDATE videos SET is_short = true
+  WHERE id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+$$, '§13  an owned video can be a short');
+
 -- ------------------------------------ §6.5 — watch_events is append-only ---
 INSERT INTO watch_events (user_id, video_id, position_sec, watch_pct)
 VALUES ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 42, 0.35);
