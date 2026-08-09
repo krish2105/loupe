@@ -110,8 +110,8 @@ Full reasoning, including what the split costs:
 | CI | Nine jobs: web, API, AI, eval, recsys, media, ingest, pipeline, schema |
 | Staging deploy | Live at [web-jade-two-b023n56l0y.vercel.app](https://web-jade-two-b023n56l0y.vercel.app) |
 
-Test counts: 110 web, 96 API, 53 AI, 40 eval, 43 recsys, 12 media, 19 ingest,
-49 pipeline, 21 schema assertions. **443 in total**, all green in CI across nine
+Test counts: 114 web, 96 API, 53 AI, 40 eval, 43 recsys, 12 media, 19 ingest,
+49 pipeline, 21 schema assertions. **447 in total**, all green in CI across nine
 jobs.
 
 Seed a browsable catalogue locally with:
@@ -490,6 +490,11 @@ a plain store behind `useSyncExternalStore`. And the transcript view used
 retrieval chunks, which put three and a half minutes of speech on one line;
 rebuilt on word timings, the same episode went from 13 walls of text to 340
 readable lines.
+
+**The player bar expands to a full-screen view** where the transcript is the
+hero rather than a placeholder square — a music app fills that space with
+artwork, and an episode has none. It shares the bar's media element, so
+expanding never interrupts playback.
 
 **The sleep timer counts down in seconds** and is computed from a deadline
 rather than decremented, so a backgrounded tab that only gets one timer callback

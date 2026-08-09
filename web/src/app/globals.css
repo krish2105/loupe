@@ -237,3 +237,28 @@
     transition: none;
   }
 }
+
+
+/*
+  The full-screen listening view rising from the player bar.
+
+  A keyframe rather than a Motion component: this project already replaced two
+  Motion animations with CSS transforms when they turned out not to track prop
+  changes, and a one-shot entrance has no state to track anyway.
+*/
+@keyframes loupe-sheet-in {
+  from {
+    transform: translateY(2rem);
+    opacity: 0;
+  }
+}
+
+.loupe-sheet {
+  animation: loupe-sheet-in 220ms var(--ease-out-quart);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loupe-sheet {
+    animation: none;
+  }
+}

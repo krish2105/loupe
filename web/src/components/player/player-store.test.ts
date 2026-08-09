@@ -20,6 +20,7 @@ function fakeMedia(
 
   const media = {
     currentTime: 0,
+    playbackRate: 1,
     duration: overrides.duration ?? 600,
     paused: true,
     readyState: overrides.readyState ?? 1,
@@ -174,5 +175,55 @@ describe("PlayerStore", () => {
       store.pause();
       store.toggle();
     }).not.toThrow();
+  });
+});
+
+
+describe("playback speed", () => {
+  it("applies to the element", () => {
+    const store = new PlayerStore();
+    const media = fakeMedia();
+    store.attach(media);
+
+    store.setRate(1.5);
+
+    expect(media.playbackRate).toBe(1.5);
+    expect(store.getSnapshot().rate).toBe(1.5);
+  });
+
+  it("survives a track change", () => {
+    /**
+     * Loading a new source resets the element to 1×. Someone who chose 1.5×
+     * did not choose it for one episode, and the local copy this replaced lost
+     * it every time the queue advanced.
+     */
+    const store = new PlayerStore();
+    store.attach(fakeMedia());
+    store.setRate(1.75);
+
+    const next = fakeMedia();
+    store.attach(next);
+
+    expect(next.playbackRate).toBe(1.75);
+    expect(store.getSnapshot().rate).toBe(1.75);
+  });
+
+  it("is remembered with no element attached", () => {
+    const store = new PlayerStore();
+    store.setRate(2);
+
+    expect(store.getSnapshot().rate).toBe(2);
+  });
+
+  it("refuses a rate the element would reject", () => {
+    // Media elements throw on a non-positive rate and stop decoding audio well
+    // above 4×. Clamping is cheaper than a try/catch around every caller.
+    const store = new PlayerStore();
+
+    store.setRate(0);
+    expect(store.getSnapshot().rate).toBe(0.25);
+
+    store.setRate(99);
+    expect(store.getSnapshot().rate).toBe(4);
   });
 });

@@ -36,7 +36,9 @@ export type IconName =
   | "repeat-one"
   | "queue"
   | "download"
-  | "audio";
+  | "audio"
+  | "expand"
+  | "collapse";
 
 const PATHS: Record<IconName, React.ReactNode> = {
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
@@ -184,6 +186,8 @@ const PATHS: Record<IconName, React.ReactNode> = {
     </>
   ),
   queue: <path d="M4 7h11M4 12h11M4 17h7M17 11v8M17 11l4-1.5v8" />,
+  expand: <path d="m7 14 5-5 5 5" />,
+  collapse: <path d="m7 10 5 5 5-5" />,
   download: <path d="M12 4v10M8 10.5l4 3.5 4-3.5M5 19h14" />,
   audio: (
     <>

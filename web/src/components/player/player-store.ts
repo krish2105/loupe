@@ -15,6 +15,7 @@
 /** The slice of HTMLMediaElement this store needs. Narrow, so tests can fake it. */
 export interface MediaLike {
   currentTime: number;
+  playbackRate: number;
   readonly duration: number;
   readonly paused: boolean;
   readonly readyState: number;
@@ -39,6 +40,16 @@ export type PlayerSnapshot = {
    * timeline and the mark in the sentence quietly stop matching.
    */
   marks: number[];
+  /**
+   * Playback speed.
+   *
+   * In the store rather than in the player bar, because two surfaces now show
+   * it — the bar and the full-screen view — and a component holding its own
+   * copy is how they end up disagreeing. It also survives a track change, which
+   * a local copy did not: loading a new source resets the element to 1×, and
+   * someone who chose 1.5× did not choose it for one episode.
+   */
+  rate: number;
 };
 
 const EMPTY: PlayerSnapshot = {
@@ -47,6 +58,7 @@ const EMPTY: PlayerSnapshot = {
   isPlaying: false,
   isReady: false,
   marks: [],
+  rate: 1,
 };
 
 /** HTMLMediaElement.HAVE_METADATA. Below this, currentTime writes do not stick. */
@@ -117,6 +129,9 @@ export class PlayerStore {
     if (!media) return () => {};
 
     this.media = media;
+    // A new element starts at 1×. Re-applying is what makes the chosen speed
+    // outlive a track change.
+    media.playbackRate = this.snapshot.rate;
     const onEvent = () => this.sync();
     for (const event of MEDIA_EVENTS) media.addEventListener(event, onEvent);
 
@@ -207,6 +222,12 @@ export class PlayerStore {
     for (const listener of this.listeners) listener();
   };
 
+  setRate = (rate: number): void => {
+    const clamped = Math.min(4, Math.max(0.25, rate));
+    if (this.media) this.media.playbackRate = clamped;
+    this.publish({ ...this.snapshot, rate: clamped });
+  };
+
   private clampToDuration(seconds: number): number {
     const { duration } = this.media ?? {};
     if (typeof duration !== "number" || !Number.isFinite(duration) || duration <= 0) {
@@ -230,7 +251,7 @@ export class PlayerStore {
   private sync() {
     const media = this.media;
     if (!media) {
-      this.publish({ ...EMPTY, marks: this.snapshot.marks });
+      this.publish({ ...EMPTY, marks: this.snapshot.marks, rate: this.snapshot.rate });
       return;
     }
 
@@ -242,8 +263,10 @@ export class PlayerStore {
       duration: Number.isFinite(media.duration) ? media.duration : 0,
       isPlaying: !media.paused,
       isReady,
-      // Carried forward: a timeupdate must not wipe the citations.
+      // Carried forward: a timeupdate must not wipe the citations, and the
+      // element is the authority on rate only while one is attached.
       marks: this.snapshot.marks,
+      rate: media.playbackRate || this.snapshot.rate,
     });
   }
 
@@ -259,7 +282,8 @@ export class PlayerStore {
       prev.duration === next.duration &&
       prev.isPlaying === next.isPlaying &&
       prev.isReady === next.isReady &&
-      prev.marks === next.marks
+      prev.marks === next.marks &&
+      prev.rate === next.rate
     ) {
       return;
     }

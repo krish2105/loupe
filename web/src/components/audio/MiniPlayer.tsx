@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { Icon } from "@/components/shell/Icon";
 import { useHls } from "@/components/player/useHls";
 import { usePlayerControls, usePlayerState } from "@/components/player/PlayerContext";
 import { useProgressReporting } from "@/components/player/useProgressReporting";
 import { useQueueControls, useQueueState, useQueueStore } from "./QueueContext";
+import { NowPlaying } from "./NowPlaying";
 import { QueuePanel } from "./QueuePanel";
 import { SleepTimer } from "./SleepTimer";
 import { useMediaSession } from "./useMediaSession";
@@ -40,15 +40,15 @@ export function MiniPlayer() {
   const mediaRef = useRef<HTMLVideoElement | null>(null);
   const [mounted, setMounted] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
-  const [speed, setSpeed] = useState(1);
+  const [expanded, setExpanded] = useState(false);
 
   const setMedia = useCallback((element: HTMLVideoElement | null) => {
     mediaRef.current = element;
     setMounted(element !== null);
   }, []);
 
-  const { attach, toggle, seek, nudge } = usePlayerControls();
-  const { currentTime, duration, isPlaying } = usePlayerState();
+  const { attach, toggle, seek, nudge, setRate } = usePlayerControls();
+  const { currentTime, duration, isPlaying, rate } = usePlayerState();
 
   useHls(mediaRef, current?.src ?? "", mounted && Boolean(current));
   useProgressReporting(current?.id ?? null);
@@ -71,12 +71,6 @@ export function MiniPlayer() {
     return () => root.classList.remove("has-miniplayer");
   }, []);
 
-  // Playback speed is applied to the element rather than held in the store,
-  // because it changes nothing the store models. Re-applied on track change
-  // since a new source resets it.
-  useEffect(() => {
-    if (mediaRef.current) mediaRef.current.playbackRate = speed;
-  }, [speed, current?.id]);
 
 
   if (!current) return null;
@@ -94,7 +88,9 @@ export function MiniPlayer() {
         aria-hidden="true"
       />
 
-      {queueOpen && <QueuePanel onClose={() => setQueueOpen(false)} />}
+      {expanded && <NowPlaying onCollapse={() => setExpanded(false)} />}
+
+      {queueOpen && !expanded && <QueuePanel onClose={() => setQueueOpen(false)} />}
 
       <div
         className={cn(
@@ -122,20 +118,31 @@ export function MiniPlayer() {
         />
 
         <div className="flex items-center gap-3 px-3 py-2 md:px-4">
-          <div className="min-w-0 flex-1">
-            <Link
-              href={`/listen/${current.id}`}
-              className="block truncate text-(length:--step--1) font-medium hover:underline"
-            >
-              {current.title}
-            </Link>
-            <Link
-              href={`/c/${current.channelHandle}`}
-              className="block truncate text-(length:--step--2) text-muted hover:underline"
-            >
-              {current.channelName}
-            </Link>
-          </div>
+          {/*
+            The whole title block expands, because that is the target people
+            already reach for. It is a button rather than a link: the episode
+            page is a different thing from the player, and putting a navigation
+            behind the gesture that everywhere else opens the player would send
+            people somewhere they did not ask to go. The episode page is one tap
+            further in, from the title inside the expanded view.
+          */}
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            title="Expand the player"
+            className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          >
+            <Icon name="expand" className="size-4 shrink-0 text-muted" />
+            <span className="min-w-0">
+              <span className="block truncate text-(length:--step--1) font-medium">
+                {current.title}
+              </span>
+              <span className="block truncate text-(length:--step--2) text-muted">
+                {current.channelName}
+              </span>
+            </span>
+            <span className="sr-only">Expand the player</span>
+          </button>
 
           <div className="flex shrink-0 items-center gap-1">
             <IconButton
@@ -200,8 +207,8 @@ export function MiniPlayer() {
             </label>
             <select
               id="mini-speed"
-              value={speed}
-              onChange={(event) => setSpeed(Number(event.target.value))}
+              value={rate}
+              onChange={(event) => setRate(Number(event.target.value))}
               className="rounded-(--radius-sm) border border-rule bg-canvas px-2 py-1 text-(length:--step--2)"
             >
               {SPEEDS.map((option) => (

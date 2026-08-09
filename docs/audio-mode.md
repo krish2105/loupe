@@ -211,6 +211,64 @@ credits.
 Verified in a browser, both ways: an episode left at 248 seconds of 600 came
 back at 248; the same episode left at 592 of 600 came back at zero.
 
+## The full-screen view
+
+The player bar expands to a full-screen listening surface, from the title block,
+which is the target people already reach for.
+
+**The transcript is the hero, not artwork.** In a music app this surface is
+dominated by cover art, because cover art is what a track has. An episode here
+has none — shows carry an avatar, episodes carry nothing — so a large square
+would be a placeholder occupying the best space on the screen. The transcript
+takes it instead: the words, timed, following the audio, and clickable to seek.
+ADR 0003 argued spoken audio was the right catalogue because every capability
+already built applies to it, and this is what that looks like given the whole
+screen.
+
+**There is no second media element.** The one in the bar keeps playing and this
+view reads the same store, which is the only reason expanding does not interrupt
+the audio.
+
+**The page behind is made `inert`** rather than wrapped in a hand-written focus
+trap. One attribute removes it from the tab order and from assistive technology,
+which is what a focus trap is imitating. Focus moves to the collapse button on
+open and Escape closes.
+
+The expand target is a button, not a link. The episode page is a different thing
+from the player, and putting navigation behind the gesture that everywhere else
+opens the player would send people somewhere they did not ask to go. The episode
+page is one tap further in, from the title inside the view.
+
+Playback speed moved into the player store while building this. Two surfaces now
+show it, and a component holding its own copy is how they end up disagreeing.
+Moving it fixed a bug that had been there since the bar was built: loading a new
+source resets the element to 1×, so the chosen speed was silently lost on every
+track change. It also exposed a second one — the store's change check listed
+every field by name and did not know about the new one, so rate changes were
+published to nobody.
+
+**Two things this surfaced in the transcript view**, both of which were wrong on
+the episode page too:
+
+The follow-along guard was a boolean. A smooth `scrollTo` emits scroll events
+for its whole duration, so the flag absorbed the first and every one after it
+read as a person scrolling. Following switched itself off on the first automatic
+scroll, every time. The symptom, once the full-screen view made it obvious: a
+transcript sitting at 0:00 while the audio played at nine minutes. It is a
+timestamp window now, and a large jump scrolls instantly rather than easing for
+seconds across a forty-minute transcript.
+
+The list capped itself at `60dvh`. Correct on the episode page, where it sits in
+a scrolling document; wrong inside a sheet whose parent already constrains the
+space, because "scroll the active line a third of the way down" then computed a
+third of the list's height rather than a third of the visible area, and put the
+active line off screen.
+
+Verified in a browser: expanding leaves exactly one media element and does not
+pause; the page behind goes inert; the transcript lands on the playing line with
+it on screen; Escape and the collapse button both restore the page, clear the
+scroll lock, and leave the audio running.
+
 ## The sleep timer
 
 Shows a running countdown in the player bar, in seconds, with one press to
@@ -264,6 +322,7 @@ backgrounded-tab case the deadline design exists for.
 | Playing a downloaded episode with the network truly down | **Not verified** — needs a real offline device |
 | Sleep timer countdown and firing | **Verified in a browser**, including the backgrounded-tab path |
 | Playhead restored after reload | **Verified in a browser**, mid-episode and near the end |
+| Full-screen view | **Verified in a browser** — one media element, inert page, following transcript, Escape |
 
 The pattern from every previous phase holds: what could be made pure was made
 pure and tested, and what needs a device says so.

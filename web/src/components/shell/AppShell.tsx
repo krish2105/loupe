@@ -52,7 +52,9 @@ export function AppShell({
   const close = useCallback(() => setOverride(false), []);
 
   return (
-    <div className="min-h-dvh">
+    /* Marked so the full-screen listening view can make everything behind it
+       inert, which is what a hand-written focus trap is imitating. */
+    <div className="min-h-dvh" data-app-shell>
       <TopBar onToggleSidebar={toggle} user={user} unread={unread} />
 
       <Sidebar open={open} channels={channels} isSignedIn={Boolean(user)} />

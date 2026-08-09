@@ -24,13 +24,41 @@ import { cn, formatTimecode } from "@/lib/utils";
  * yanking you back to the playhead while you are reading ahead is worse than
  * one that does not follow at all.
  */
-export function TranscriptView({ lines }: { lines: Line[] }) {
+export function TranscriptView({
+  lines,
+  fill = false,
+}: {
+  lines: Line[];
+  /**
+   * Fill the parent instead of capping at 60dvh.
+   *
+   * The cap is right on the episode page, where the transcript sits in a
+   * scrolling document and an uncapped list would run for pages. It is wrong in
+   * the full-screen view, where the parent already constrains the space: the
+   * list would be taller than the area it is shown in, so "scroll the active
+   * line a third of the way down" would compute a third of the list's height
+   * rather than a third of what anyone can see, and put the active line off
+   * screen.
+   */
+  fill?: boolean;
+}) {
   const { currentTime } = usePlayerState();
   const { seek, play } = usePlayerControls();
 
   const containerRef = useRef<HTMLOListElement>(null);
   const followingRef = useRef(true);
-  const programmaticScroll = useRef(false);
+
+  /**
+   * Until when scroll events belong to this component rather than to a person.
+   *
+   * A timestamp, not a boolean, and that was a bug worth keeping the note for.
+   * A smooth `scrollTo` emits scroll events for its whole duration, so a
+   * one-shot flag absorbed the first and let the rest be read as a person
+   * scrolling — following switched itself off on the first automatic scroll,
+   * every time. The symptom was a transcript sitting at 0:00 while the audio
+   * played at nine minutes.
+   */
+  const programmaticUntil = useRef(0);
 
   const activeIndex = activeLine(lines, currentTime);
 
@@ -40,12 +68,8 @@ export function TranscriptView({ lines }: { lines: Line[] }) {
 
     const onScroll = () => {
       // Distinguishing a person's scroll from the one this component just
-      // performed. Without the flag, following would switch itself off on the
-      // first automatic scroll and never come back.
-      if (programmaticScroll.current) {
-        programmaticScroll.current = false;
-        return;
-      }
+      // performed.
+      if (Date.now() < programmaticUntil.current) return;
       followingRef.current = false;
     };
 
@@ -62,11 +86,15 @@ export function TranscriptView({ lines }: { lines: Line[] }) {
     );
     if (!container || !line) return;
 
-    programmaticScroll.current = true;
-    container.scrollTo({
-      top: line.offsetTop - container.clientHeight / 3,
-      behavior: "smooth",
-    });
+    const top = line.offsetTop - container.clientHeight / 3;
+
+    // Smooth for a line-by-line advance, instant for a jump. Easing across a
+    // forty-minute transcript takes seconds, during which the highlighted line
+    // is somewhere off screen and the audio has moved on again.
+    const far = Math.abs(top - container.scrollTop) > container.clientHeight * 2;
+
+    programmaticUntil.current = Date.now() + (far ? 200 : 800);
+    container.scrollTo({ top, behavior: far ? "auto" : "smooth" });
   }, [activeIndex]);
 
   if (lines.length === 0) {
@@ -78,14 +106,14 @@ export function TranscriptView({ lines }: { lines: Line[] }) {
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between">
+    <div className={cn(fill && "flex h-full flex-col")}>
+      <div className="flex shrink-0 items-center justify-between">
         <h2 className="text-(length:--step-0) font-medium">Transcript</h2>
         <button
           type="button"
           onClick={() => {
             followingRef.current = true;
-            programmaticScroll.current = true;
+            programmaticUntil.current = Date.now() + 800;
             containerRef.current
               ?.querySelector(`[data-passage="${Math.max(0, activeIndex)}"]`)
               ?.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -98,7 +126,10 @@ export function TranscriptView({ lines }: { lines: Line[] }) {
 
       <ol
         ref={containerRef}
-        className="mt-3 max-h-[60dvh] space-y-1 overflow-y-auto pr-2"
+        className={cn(
+          "mt-3 space-y-1 overflow-y-auto pr-2",
+          fill ? "min-h-0 flex-1" : "max-h-[60dvh]",
+        )}
       >
         {lines.map((line, index) => (
           <li key={line.index} data-passage={index}>
