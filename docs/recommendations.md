@@ -7,6 +7,43 @@ or the failure is analysed.*
 
 ---
 
+## Re-run against the real corpus — and why it proves nothing
+
+Attempted after eight talks with real transcripts entered the catalogue, on the
+reasoning that real content ought to improve content-based candidate
+generation. It does not measure that, and the attempt is recorded because the
+reason is more useful than the numbers.
+
+First, it crashed. `content_neighbours` asked for twelve neighbours from a
+catalogue of eight and numpy raised `ValueError: kth(=-12) out of bounds`
+rather than returning fewer. That is a real defect — eight videos is not a
+hypothetical size, it is what a platform has on its first day — and it is
+fixed by clamping to the catalogue size.
+
+Then it ran, on a 79-video catalogue rather than the 3,065-video one above:
+
+```
+model         recall@20 0.347   NDCG@20 0.211
+baseline      recall@20 0.440   NDCG@20 0.290
+candidate recall 1.000   ·   mean candidates 79   ·   beats_baseline false
+```
+
+**These are not comparable to the table below and should not be read as an
+improvement.** Recommending twenty items from a catalogue of seventy-nine is a
+different task from recommending twenty from three thousand; a quarter of the
+catalogue is in every result, so recall is high by construction. Candidate
+recall of exactly 1.0 gives it away — stage one returned the entire catalogue,
+so the two-stage architecture was not doing anything.
+
+What the run does confirm is the conclusion that already stood: **the model
+still loses to the popularity baseline**, at both catalogue sizes.
+
+What it cannot tell us is whether real transcripts help, because nothing here
+depends on transcript quality. The personas are synthetic, the watch histories
+are generated, and eight real talks among seventy-nine change the catalogue's
+size rather than its nature. This evaluation needs real watch events from real
+people, and no amount of better content substitutes for that.
+
 ## Result
 
 Five synthetic personas, 3,065-video catalogue, final 20% of each history held

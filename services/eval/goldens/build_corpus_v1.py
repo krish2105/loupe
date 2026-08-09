@@ -34,6 +34,13 @@ OUT = Path(__file__).parent / "corpus-v1.json"
 #
 # The anchor is a distinctive phrase from the spoken script, used only to locate
 # the moment. It is never shown to the retriever.
+#
+# Several anchors are not the phrase originally written, because the
+# transcriber did not hear that phrase. "ninety fifth" became "95th", and
+# "load balancers route to it" became "load balances rude to it" — a real
+# recognition error on clean synthesised speech, which is a useful reminder of
+# what the 4.8% word error rate is made of. Anchors are chosen from what the
+# transcript actually says, since that is what a citation has to land in.
 CASES: list[tuple] = [
     # --------------------------------------------------------------- factual
     ("c01", "factual", "why does generating the first token cost more than later ones",
@@ -47,7 +54,7 @@ CASES: list[tuple] = [
     ("c05", "factual", "what makes a small number of channels a problem",
      "quantisation", "magnitudes orders of magnitude larger", False),
     ("c06", "factual", "when does guessing ahead stop paying off",
-     "speculative-decoding", "below about forty percent", False),
+     "speculative-decoding", "the draft model's own cost exceeds", False),
     ("c07", "factual", "how can several tokens be checked at once",
      "speculative-decoding", "verifying a sequence in parallel", False),
     ("c08", "factual", "why do fixed groups of requests waste hardware",
@@ -60,6 +67,28 @@ CASES: list[tuple] = [
      "roofline", "the arithmetic was never the constraint", False),
     ("c12", "factual", "what is the most common way to fool yourself when testing search",
      "retrieval-eval", "writing the evaluation questions after reading", False),
+
+    # ------------------------------------------------- deep in a long talk
+    # The point of these. The six short talks are each a single chunk, so a
+    # citation in them can only ever point at t=0 and the metric measures
+    # nothing. `serving-architecture` and `attention-variants` chunk twice, so
+    # an answer drawn from their second half must cite the second chunk — which
+    # is the first time in this repository that a citation has had somewhere
+    # wrong to land.
+    ("d01", "factual", "what should you watch instead of average latency",
+     "serving-architecture", "report time to first token separately", False),
+    ("d02", "factual", "what goes wrong when a replica restarts",
+     "serving-architecture", "it receives a burst that fills its cache", False),
+    ("d03", "factual", "which failure produces no alert at all",
+     "serving-architecture", "The fourth is silent degradation", False),
+    ("d04", "factual", "what happens if a client reads the response too slowly",
+     "serving-architecture", "applies back pressure all the way", False),
+    ("d05", "factual", "how much memory does one token of context cost",
+     "attention-variants", "about half a megabyte per token", False),
+    ("d06", "factual", "what breaks when converting a checkpoint carelessly",
+     "attention-variants", "Naive truncation does not", False),
+    ("d07", "factual", "which part of the model do these variants not help with",
+     "attention-variants", "none of these variants fix", False),
 
     # ---------------------------------------------------- cross-video
     # Impossible on the fixture corpus, where every transcript was identical.

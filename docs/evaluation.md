@@ -7,7 +7,8 @@ benchmark the proof of the intelligence layer.
 
 ## The honest headline
 
-**Loupe still does not have a benchmark. It now has real transcripts.**
+**Loupe still does not have a benchmark. It now has real transcripts, and they
+found a real defect.**
 
 The corpus used to be a test stream with no speech in it, so every transcript
 was fixture output and every transcript was identical. That is fixed: six talks
@@ -20,9 +21,14 @@ The speech is synthesised, so it is far cleaner than any recording of a real
 room. And six talks is a small corpus, on which retrieval scores flatter
 themselves.
 
-So the numbers are labelled for what they are, one of them is reported as
-*not measurable* rather than quietly kept, and the fixture results are left
+So the numbers are labelled for what they are, and the fixture results are left
 below for comparison rather than deleted.
+
+The most useful thing in this document is that citation accuracy went *down*
+when the corpus got real — from 0.600 to 0.053 — because the fixture metric had
+been confirming a tautology, and the drop exposed a defect in what a citation
+actually pointed at. Fixing it took the score to 0.421. An evaluation that only
+ever moves upward is not measuring anything.
 
 ## What is and is not measurable on the current corpus
 
@@ -33,7 +39,7 @@ below for comparison rather than deleted.
 | Cross-video comparison | **Meaningful, and newly possible** | Six distinct topics, several deliberately mentioning each other in passing. Four cases is too few to conclude from, but the category is no longer empty by construction. |
 | Faithfulness | **Meaningful but uninformative** | Extractive answering quotes its sources, so this is ~1.0 by construction. It is a regression guard, not a quality measure. |
 | Retrieval precision@5 | **Partially meaningful** | Questions are written from the topics rather than from the text, so retrieval does semantic work. But six documents is a small field to be precise within. |
-| Citation timestamp accuracy | **Not measurable on this corpus** | The talks are shorter than the chunker's minimum chunk, so each is a single chunk and every citation points at its start. This measures corpus length, not citation logic. Explained under the results. |
+| Citation timestamp accuracy | **Meaningful, and it found a defect** | Expected timestamps are anchored on the sentence that answers the question, not on chunk boundaries as the fixture set used. That change took the score from 0.600 to 0.053 and exposed citations pointing at the top of a three-minute passage. Now 0.421 after the fix. |
 | Non-English | **Out of scope** | §17 decision 3 chose English only. |
 
 ## Results — real speech, 29 cases
@@ -42,19 +48,22 @@ Golden set `corpus-v1`, corpus `groq-whisper`, answerer `extractive-v1`,
 embeddings `bge-m3`, timestamp tolerance ±5s. Six talks, 1,316 words of script,
 transcribed by whisper-large-v3-turbo.
 
+Eight talks — six short, two long enough to chunk more than once — 3,273 words
+of script, 36 cases.
+
 ```
-refusal accuracy              0.966    was 0.792 on fixtures
-refusal rate                  0.483
+refusal accuracy              0.889    was 0.792 on fixtures
+refusal rate                  0.472
 false answer rate             0.000    was 0.357   ← the one that mattered
-citation timestamp accuracy   0.071    was 0.600   ← not a regression; see below
-faithfulness (lexical)        0.985
+citation timestamp accuracy   0.421    was 0.600 on fixtures, which was a tautology
+faithfulness (lexical)        0.988
 word error rate               0.048    not previously measurable
 ```
 
 By category:
 
 ```
-factual         11/12 decided correctly
+factual         15/19 decided correctly
 out_of_scope     5/5
 adversarial      8/8    was 4/8
 cross_video      4/4    was undefined
@@ -86,25 +95,65 @@ retrieval has to separate subject from mention.
 Four cases is far too few to conclude anything. It is reported because the
 category went from impossible to possible, not because 4/4 means much.
 
-### The citation number collapsed, and it is measuring the wrong thing
+### The citation metric found a real defect, and it has been fixed
 
-0.071 against 0.600 looks like a severe regression. It is neither a regression
-nor, on this corpus, a citation measurement.
+This is what the whole document exists for, so it is worth the space.
 
-The chunker's `MIN_TOKENS` is 300. These talks are 210 to 230 words each, so
-**every talk is a single chunk** — six chunks for six talks, each spanning the
-whole runtime. Every citation therefore points at roughly t=0, while the golden
-anchors sit throughout each talk. One of fourteen lands within ±5s, and it is
-the one near the beginning.
+The fixture set scored 0.600 and, in its own words, read its expected
+timestamps "from real chunk boundaries". A citation returned the chunk's start
+time. So the metric was checking that a citation equals the chunk start, which
+is true by construction — it confirmed a tautology and reported it as 0.600.
 
-So the number measures "the corpus is shorter than the smallest chunk", not
-"does a citation land where it claims". The fixture transcript ran about twenty
-minutes and chunked several times, which is why it scored 0.600.
+`corpus-v1` anchors expected timestamps on the sentence that actually answers
+the question, resolved against real word timings. Under that, citation accuracy
+was **0.053**. Chasing it found the defect: §11.1 promises a citation lets you
+jump to *the moment*, and what the system returned was the top of a
+three-minute passage. The word-level timestamps needed to do better had been a
+hard requirement since §10.2 and were never read.
 
-The fix is talks long enough to chunk, which is what real conference recordings
-are. Until then this metric is reported as not measurable, and the fixture
-figure remains the better estimate of the citation logic. Neither is a
-benchmark.
+Fixed in three steps, each measured:
+
+```
+citing the chunk start                     0.053
++ picking the sentence by word overlap     0.263
++ picking the sentence by embedding        0.421
+```
+
+The middle step was not enough on its own, and the reason is worth recording:
+nine of nineteen citations landed six to fourteen seconds out, which is one or
+two sentences. Sentences inside one passage are all about the same subject and
+differ by shades that shared vocabulary does not capture. Embedding them
+against the question — one extra call, on vectors already being computed —
+nearly doubled the score.
+
+**0.421 is not good, and it is honest.** A ±5s tolerance is roughly one
+sentence of speech, so a citation that picks the sentence *before* the right
+one already fails. The remaining errors are five cases more than thirty
+seconds out, where the wrong passage was cited rather than the wrong sentence
+within it, and four questions refused outright.
+
+### Four answerable questions were refused, and the threshold is now too strict
+
+The fixture run concluded the threshold was too permissive. On real speech the
+opposite is true. The sweep:
+
+```
+threshold   accuracy   false answers   false refusals
+0.34         0.806          7               0
+0.38         0.944          2               0
+0.42         0.889          0               4     ← current
+0.50         0.806          0               7
+```
+
+0.38 maximises accuracy. 0.42 is kept anyway, because §11.1 is explicit that a
+confident wrong answer is the failure that matters, and 0.42 is the lowest
+threshold with none of them. That is a product decision, not a metric to
+maximise, and it costs four refusals of questions the corpus does answer.
+
+The cause is the discipline the corpus itself recommends: questions written
+from the topic rather than from the transcript share less vocabulary with it,
+so similarity is lower. Writing questions honestly makes retrieval look worse,
+which is the point of writing them honestly.
 
 ### What is still not measured
 

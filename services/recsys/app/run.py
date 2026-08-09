@@ -127,7 +127,16 @@ def content_neighbours(ids: list[str], corpus: list[str]) -> dict[str, list[tupl
         for offset, row in enumerate(similarity):
             index = start + offset
             row[index] = -1.0  # never a neighbour of itself
-            top = np.argpartition(row, -TOP_NEIGHBOURS)[-TOP_NEIGHBOURS:]
+            # Asking for more neighbours than the catalogue holds raises
+            # ValueError rather than returning fewer, so a small catalogue
+            # crashed the recommender outright. Found by running this against
+            # an eight-video corpus, which is not a hypothetical size — it is
+            # what a platform has on its first day.
+            wanted = min(TOP_NEIGHBOURS, len(row) - 1)
+            if wanted < 1:
+                neighbours[ids[index]] = []
+                continue
+            top = np.argpartition(row, -wanted)[-wanted:]
             ordered = sorted(top, key=lambda j: row[j], reverse=True)
             neighbours[ids[index]] = [
                 (ids[j], float(row[j])) for j in ordered if row[j] > 0.05

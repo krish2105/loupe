@@ -83,7 +83,8 @@
       "question": "when does guessing ahead stop paying off",
       "should_refuse": false,
       "video_id": "380d2645-54e8-4f6d-8e34-ea5960ccc96d",
-      "note": "In speculative-decoding; no timestamp because 'below about forty percent' was not found in the transcript."
+      "expected_start_sec": 43.9,
+      "note": "Anchored on \"the draft model's own cost exceeds\" in speculative-decoding."
     },
     {
       "id": "c07",
@@ -138,6 +139,69 @@
       "video_id": "82a07655-e781-45ac-8b78-4559ab946165",
       "expected_start_sec": 4.9,
       "note": "Anchored on 'writing the evaluation questions after reading' in retrieval-eval."
+    },
+    {
+      "id": "d01",
+      "category": "factual",
+      "question": "what should you watch instead of average latency",
+      "should_refuse": false,
+      "video_id": "ed6b5a3b-0b5b-41b2-9eaf-4723a4400366",
+      "expected_start_sec": 208.0,
+      "note": "Anchored on 'report time to first token separately' in serving-architecture."
+    },
+    {
+      "id": "d02",
+      "category": "factual",
+      "question": "what goes wrong when a replica restarts",
+      "should_refuse": false,
+      "video_id": "ed6b5a3b-0b5b-41b2-9eaf-4723a4400366",
+      "expected_start_sec": 323.0,
+      "note": "Anchored on 'it receives a burst that fills its cache' in serving-architecture."
+    },
+    {
+      "id": "d03",
+      "category": "factual",
+      "question": "which failure produces no alert at all",
+      "should_refuse": false,
+      "video_id": "ed6b5a3b-0b5b-41b2-9eaf-4723a4400366",
+      "expected_start_sec": 332.9,
+      "note": "Anchored on 'The fourth is silent degradation' in serving-architecture."
+    },
+    {
+      "id": "d04",
+      "category": "factual",
+      "question": "what happens if a client reads the response too slowly",
+      "should_refuse": false,
+      "video_id": "ed6b5a3b-0b5b-41b2-9eaf-4723a4400366",
+      "expected_start_sec": 279.1,
+      "note": "Anchored on 'applies back pressure all the way' in serving-architecture."
+    },
+    {
+      "id": "d05",
+      "category": "factual",
+      "question": "how much memory does one token of context cost",
+      "should_refuse": false,
+      "video_id": "402bce0a-8526-4eff-b5b5-81d0a10f6890",
+      "expected_start_sec": 187.2,
+      "note": "Anchored on 'about half a megabyte per token' in attention-variants."
+    },
+    {
+      "id": "d06",
+      "category": "factual",
+      "question": "what breaks when converting a checkpoint carelessly",
+      "should_refuse": false,
+      "video_id": "402bce0a-8526-4eff-b5b5-81d0a10f6890",
+      "expected_start_sec": 279.2,
+      "note": "Anchored on 'Naive truncation does not' in attention-variants."
+    },
+    {
+      "id": "d07",
+      "category": "factual",
+      "question": "which part of the model do these variants not help with",
+      "should_refuse": false,
+      "video_id": "402bce0a-8526-4eff-b5b5-81d0a10f6890",
+      "expected_start_sec": 289.2,
+      "note": "Anchored on 'none of these variants fix' in attention-variants."
     },
     {
       "id": "x01",

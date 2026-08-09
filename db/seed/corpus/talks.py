@@ -200,4 +200,212 @@ TALKS: list[Talk] = [
         carries an error bar wide enough to hide almost any regression.
         """,
     ),
+
+    # ------------------------------------------------------------------ long
+    # The six above are 210 to 230 words each, which is shorter than the
+    # chunker's 300-token minimum — so each became a single chunk, every
+    # citation pointed at t=0, and citation timestamp accuracy measured corpus
+    # length rather than citation logic. These two are long enough to chunk
+    # several times, which is what makes that metric mean anything.
+    Talk(
+        slug="serving-architecture",
+        title="Serving a language model, end to end",
+        description="Everything between an HTTP request and a token coming back.",
+        script="""
+        Let us walk through what happens between a request arriving and a token
+        coming back, because most of the interesting engineering lives in
+        places people do not look. The request arrives at a load balancer and
+        is routed to a replica. Already there is a decision here that people
+        get wrong. Routing purely by least connections is bad for language
+        model serving, because a replica holding twenty short requests is far
+        less loaded than one holding two very long ones, and connection counts
+        cannot see that. Routing on estimated remaining tokens works much
+        better, and estimating that is itself a small prediction problem.
+        Once the request reaches a replica it enters the scheduler queue. The
+        scheduler decides admission, and the binding constraint is almost never
+        the model weights. It is the key value cache. Weights are a fixed cost
+        paid once at startup; the cache grows with every concurrent sequence
+        and with the length of each one. A scheduler that admits requests
+        without modelling cache growth will accept work it cannot finish and
+        then have to evict something, which wastes everything computed so far.
+        Prefill comes next. The entire prompt is processed in one forward pass,
+        and unlike generation this step is compute bound rather than memory
+        bound, because every token in the prompt is processed in parallel. A
+        long prompt therefore occupies the device for a meaningful block of
+        time, and if you are not careful it stalls every other request that
+        wanted to generate a token during that window. This is why chunked
+        prefill exists. You break a long prompt into pieces and interleave
+        them with decoding steps from other sequences, which costs a little
+        total throughput and dramatically improves latency for everyone else.
+        Then generation begins, one token at a time, each requiring a full pass
+        over the weights. This is where the memory bandwidth wall dominates.
+        The arithmetic per token is trivial and the data movement is enormous,
+        which is why batching helps so much: a batch of sixty four sequences
+        reads the weights once and serves sixty four tokens, so the cost per
+        token falls by nearly that factor until you run out of cache.
+        Sampling happens on every step and is easy to get wrong. Temperature,
+        top k, and nucleus sampling are usually applied on the device, but a
+        naive implementation synchronises with the host on every token to check
+        stopping conditions, and that synchronisation can cost more than the
+        sampling itself. Keeping stop detection on the device matters more than
+        people expect. Finally the token is streamed back. Server sent events
+        are the usual transport, and the subtlety is that a token is not
+        necessarily a character boundary. Emitting raw token text can split a
+        multi byte character in half and produce a replacement glyph in
+        somebody's browser, so you buffer until the bytes are valid.
+        The lesson across all of this is that throughput and latency are
+        different objectives and improving one commonly harms the other.
+        Larger batches raise throughput and raise time to first token. Chunked
+        prefill lowers tail latency and lowers total throughput slightly. There
+        is no configuration that is best at everything, only one that is best
+        for the traffic you actually have, which is why measuring your own
+        traffic beats copying somebody else's configuration.
+
+        Let us talk about what to measure, because the wrong dashboard hides
+        every problem worth finding. Average latency is nearly useless here.
+        The distribution is heavily skewed, so a mean sits comfortably while a
+        meaningful fraction of users wait several times longer. Report the
+        ninety fifth and ninety ninth percentiles, and report time to first
+        token separately from time between tokens, because they have different
+        causes and different fixes. Time to first token is dominated by queue
+        wait and prefill. Time between tokens is dominated by batch size and
+        memory bandwidth. Averaging them into one number guarantees you cannot
+        tell which one broke.
+        Queue depth deserves a dashboard of its own. If it is consistently
+        near zero you are over provisioned and paying for hardware that idles.
+        If it grows without bound you are under provisioned and every latency
+        number you report is about to get worse in a way that looks sudden but
+        was entirely predictable. The useful signal is not the depth itself but
+        whether it is trending, and over what window.
+        Cache utilisation is the third thing to watch, and the one most often
+        missing. A replica at ninety five percent cache occupancy is one long
+        request away from evicting somebody, and evictions are invisible in
+        throughput while being extremely visible to whoever got evicted. Track
+        occupancy, track eviction count, and alert on the second one long
+        before it becomes common.
+        Now failure modes, which is where production differs from a benchmark.
+        The first is the slow client. A client that reads the stream slowly
+        applies back pressure all the way to the scheduler, and if the
+        implementation blocks on writing to the socket, one slow reader can
+        stall a batch that has nothing else to do with its time. The fix is to
+        buffer per connection and drop clients that fall too far behind, which
+        feels rude and is correct.
+        The second is the request that never ends. Models occasionally fall
+        into repetition loops and will happily generate until they hit a limit
+        you had better have set. A maximum token count per request is not
+        optional, and neither is a wall clock timeout, because a token limit
+        alone does not bound the time when the server is heavily loaded.
+        The third is the thundering herd after a restart. When a replica comes
+        back, load balancers route to it eagerly because it looks unloaded, and
+        it receives a burst that fills its cache before it has warmed anything.
+        A short ramp on new replicas costs almost nothing and prevents a
+        restart from causing a second outage.
+        The fourth is silent degradation, which is the worst of them, because
+        nothing alerts. A model loaded with a slightly wrong configuration, or
+        a quantised variant swapped in during a deploy, will serve every
+        request successfully and produce measurably worse answers. Latency is
+        fine, error rate is zero, and quality has fallen off a cliff. The only
+        defence is a small continuous evaluation running against production,
+        which almost nobody builds until the first time this happens to them.
+        """,
+    ),
+    Talk(
+        slug="attention-variants",
+        title="Attention variants, and which ones survived",
+        description="Multi-query, grouped-query, sliding window, and what each one costs.",
+        script="""
+        Standard multi head attention gives every head its own set of queries,
+        keys, and values. That is what the original transformer described and
+        it works, but at inference time it has an expensive property: the key
+        value cache scales with the number of heads. With thirty two heads you
+        store thirty two sets of keys and values for every position, and as we
+        have discussed, that cache is usually what limits concurrency.
+        Multi query attention was the first serious response. Keep separate
+        query projections for every head, but share a single key and value
+        projection across all of them. The cache shrinks by a factor equal to
+        the head count, which is enormous. The cost is quality: sharing keys
+        and values across every head removes representational capacity, and
+        models trained this way are measurably worse on tasks requiring precise
+        retrieval from the context.
+        Grouped query attention is the compromise that actually won. Instead of
+        one shared key value pair or one per head, you use a small number of
+        groups, typically eight. Heads within a group share keys and values.
+        The cache shrinks by four times or more while quality stays within
+        noise of full multi head attention. Almost every widely deployed open
+        model now uses this, which is a reasonable definition of having won.
+        Sliding window attention attacks a different axis. Rather than reducing
+        the cache per position, it reduces the number of positions attended to,
+        by restricting each token to a fixed window of recent context. Memory
+        then grows with the window rather than with the sequence, so very long
+        contexts become affordable. The obvious objection is that information
+        outside the window is lost, and the answer is that stacked layers give
+        an effective receptive field much larger than the window itself,
+        because each layer can move information one window further along. In
+        practice models interleave sliding window layers with a few full
+        attention layers, which keeps long range dependencies available where
+        they matter.
+        There is a fourth idea worth knowing, which is compressing the cache
+        into a lower dimensional latent representation and reconstructing keys
+        and values on the fly. This trades a little arithmetic for a large
+        memory saving, and because inference is memory bound that trade is
+        usually favourable. It is newer and less universally adopted, but the
+        direction is clearly right.
+        The pattern across all four is the same. Every one of them spends
+        quality, arithmetic, or context reach in order to buy memory, because
+        memory is the constraint that binds. If you remember only one thing
+        from this section, make it that: at inference time you are almost never
+        short of compute, and the architecture choices that matter are the ones
+        that shrink what you have to store.
+
+        It is worth being concrete about the memory arithmetic, because the
+        numbers are what make the design choices obvious. Consider a model with
+        thirty two layers, thirty two attention heads, and a head dimension of
+        one hundred and twenty eight. With full multi head attention, each
+        position stores two tensors, keys and values, of size thirty two heads
+        times one hundred and twenty eight dimensions, in every one of thirty
+        two layers. In half precision that is about half a megabyte per token.
+        A context of four thousand tokens therefore costs roughly two
+        gigabytes, for a single sequence. Serve thirty concurrent users and the
+        cache alone wants sixty gigabytes, which exceeds the memory of most
+        single accelerators before the weights are counted at all.
+        Now apply grouped query attention with eight groups instead of thirty
+        two heads. The key and value tensors shrink by a factor of four, so the
+        same four thousand token context costs half a gigabyte rather than two,
+        and thirty concurrent users need fifteen gigabytes rather than sixty.
+        That is the difference between one accelerator and four, and it is why
+        this particular architectural choice spread so quickly through models
+        that were otherwise quite different from one another.
+        The quality question is what took longer to settle. Early results
+        suggested multi query attention cost around one percent on standard
+        benchmarks, which sounds tolerable until you notice the losses
+        concentrate in exactly the tasks people care about, namely retrieving
+        specific facts from long contexts. Grouped query attention with eight
+        groups sits within measurement noise of full attention on the same
+        tasks, which is the whole reason it became the default rather than the
+        more aggressive option.
+        There is a practical detail that catches people converting models. The
+        number of groups must divide the number of heads, and the conversion
+        from a full attention checkpoint is not simply dropping heads. Mean
+        pooling the key and value projections within each group, then briefly
+        fine tuning, recovers most of the quality. Naive truncation does not,
+        and produces a model that appears to load correctly and generates
+        fluent nonsense on anything requiring precision.
+        Finally, a word about what none of these variants fix. Every one of
+        them reduces the cost of attending to context. None of them reduces the
+        cost of the feed forward layers, which are typically two thirds of the
+        parameters and therefore two thirds of the bandwidth per token. If your
+        workload is short prompts and long generations, attention is not your
+        problem and optimising it will disappoint you. Measure where the time
+        actually goes before choosing which of these to adopt, because the
+        right answer depends on a shape of traffic that varies enormously
+        between applications.
+        """,
+    ),
+
+    # ------------------------------------------------------------------ long
+    # The six above are 210 to 230 words each, which is shorter than the
+    # chunker's 300-token minimum — so each became a single chunk, every
+    # citation pointed at t=0, and citation timestamp accuracy measured corpus
+    # length rather than citation logic. These two are long enough to chunk
+    # several times, which is what makes that metric mean anything.,
 ]

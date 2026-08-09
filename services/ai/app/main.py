@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from . import moments
 from .answering import ExtractiveAnswerer, GeneratedAnswerer
 from .config import settings
 from .embed import build_embedder
@@ -123,14 +124,83 @@ def pool():
     return _state["pool"]
 
 
-def serialise_citation(chunk: RetrievedChunk) -> dict:
+def serialise_citation(chunk: RetrievedChunk, start_sec: float | None = None) -> dict:
+    """
+    `start_sec` is where the citation points, which is not the same as where
+    the passage begins. §11.1 promises a jump to the moment; the chunk start is
+    a jump to the top of a three-minute passage. When a moment has been located
+    inside the chunk it is used, and `chunk_start_sec` keeps the passage
+    boundary for anything that needs the span rather than the point.
+    """
     return {
         "chunk_id": chunk.chunk_id,
-        "start_sec": chunk.start_sec,
+        "start_sec": chunk.start_sec if start_sec is None else start_sec,
+        "chunk_start_sec": chunk.start_sec,
         "end_sec": chunk.end_sec,
         "text": chunk.text_display,
         "score": round(chunk.similarity, 4),
     }
+
+
+async def cited_moments(
+    connection, video_id, question: str, citations, embedder=None, query_vector=None
+) -> list[dict]:
+    """
+    Resolve each citation to the moment inside it that answers the question.
+
+    One extra read of the transcript's word timings, shared across every
+    citation for the turn. Those timings were made a hard requirement by §10.2
+    for exactly this and then never read — the citation was the chunk start,
+    which is why an evaluation anchored on real answering sentences scored
+    close to zero while the fixture set, anchored on chunk boundaries, scored
+    0.600 for confirming a tautology.
+
+    Falls back to the chunk start whenever the transcript is missing or the
+    sentence cannot be located, so this can improve a citation and cannot
+    degrade one.
+    """
+    if not citations:
+        return []
+
+    segments = await connection.fetchval(
+        "SELECT segments FROM transcripts WHERE video_id = $1", video_id
+    )
+
+    if not segments:
+        return [serialise_citation(chunk) for chunk in citations]
+
+    words = json.loads(segments) if isinstance(segments, str) else segments
+
+    # Sentences from every cited passage, embedded in one call. Lexical overlap
+    # alone put nine of nineteen citations six to fourteen seconds out on this
+    # corpus — one or two sentences — because sentences inside a passage are all
+    # about the same subject and differ by shades that shared words miss.
+    sentence_vectors: dict[int, list] = {}
+    if embedder is not None and query_vector is not None:
+        per_chunk = [moments.split_sentences(chunk.text_display) for chunk in citations]
+        flat = [sentence for group in per_chunk for sentence in group]
+        if flat:
+            vectors = embedder.embed(flat)
+            offset = 0
+            for index, group in enumerate(per_chunk):
+                sentence_vectors[index] = vectors[offset : offset + len(group)]
+                offset += len(group)
+
+    return [
+        serialise_citation(
+            chunk,
+            moments.moment_for(
+                question,
+                chunk.text_display,
+                words,
+                chunk.start_sec,
+                chunk.end_sec,
+                sentence_vectors.get(index),
+                query_vector,
+            ),
+        )
+        for index, chunk in enumerate(citations)
+    ]
 
 
 @app.get("/health")
@@ -205,7 +275,10 @@ async def ask(video_id: UUID, payload: Question) -> dict[str, object]:
         "session_id": str(session_id),
         "answer": answer.text,
         "refused": answer.refused,
-        "citations": [serialise_citation(chunk) for chunk in answer.citations],
+        "citations": await cited_moments(
+            connection, video_id, payload.question, answer.citations,
+            embedder, query_vector,
+        ),
         "top_score": round(answer.top_score, 4),
         "model": answer.model,
     }
