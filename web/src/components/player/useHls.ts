@@ -34,6 +34,15 @@ import {
 
 export type HlsStatus = "idle" | "loading" | "ready" | "error";
 
+/**
+ * How long nothing may happen before a load is called dead.
+ *
+ * Sized for a sleeping free-tier instance, which can take the better part of a
+ * minute to answer its first request. The clock resets on any activity, so this
+ * bounds *silence* rather than total load time.
+ */
+const STALL_MS = 45_000;
+
 export type HlsQuality = {
   /** Menu rows. Empty when there is no choice to offer. */
   options: QualityOption[];
@@ -70,24 +79,36 @@ export function useHls(
     if (!video || !src || !mounted) return;
 
     /**
-     * A stream that never loads has to become an error eventually.
+     * A stream that never loads has to become an error eventually — but only
+     * one that never loads, not one that is merely slow.
      *
-     * Without this, a manifest that simply never arrives leaves the player
-     * black at 0:00 / 0:00 with the play button showing and no message,
-     * indefinitely — which is precisely what a stalled fetch, a blocked host,
-     * or a network that silently drops the connection looks like. hls.js
-     * reports fatal errors it detects, and reports nothing at all when the
-     * request neither succeeds nor fails.
+     * The first version of this was a flat twenty-second timeout, and it was
+     * wrong in a way worth recording. The media service runs on an instance
+     * that sleeps when idle and can take the better part of a minute to wake,
+     * so the timeout fired on a load that was working, latched, and turned a
+     * slow start into a permanent failure message. That is a worse bug than
+     * the silence it replaced: the black player at least recovered.
      *
-     * Twenty seconds is long enough that a slow connection still loads and
-     * short enough that nobody sits looking at a black rectangle wondering
-     * whether it is their fault.
+     * So the clock is reset by any sign of life. `progress` fires as bytes
+     * arrive on the native path; hls.js fires its own events well before a
+     * manifest is parsed. A load that is moving is never failed, and a load
+     * that is genuinely dead still is.
      */
-    const stall = setTimeout(() => {
+    let stall: ReturnType<typeof setTimeout>;
+
+    const fail = () =>
       setOutcome((current) =>
         current?.src === src ? current : { src, status: "error" },
       );
-    }, 20_000);
+
+    const waitAgain = () => {
+      clearTimeout(stall);
+      stall = setTimeout(fail, STALL_MS);
+    };
+
+    waitAgain();
+    video.addEventListener("progress", waitAgain);
+    video.addEventListener("loadstart", waitAgain);
 
     // Native HLS — Safari and iOS. Assigning src is the whole integration.
     if (video.canPlayType("application/vnd.apple.mpegurl")) {
@@ -100,6 +121,8 @@ export function useHls(
 
       return () => {
         clearTimeout(stall);
+        video.removeEventListener("progress", waitAgain);
+        video.removeEventListener("loadstart", waitAgain);
         video.removeEventListener("loadedmetadata", onReady);
         video.removeEventListener("error", onError);
         video.removeAttribute("src");
@@ -127,6 +150,12 @@ export function useHls(
       });
       instance = hls;
       hlsRef.current = hls;
+
+      // Any hls.js activity counts as progress, so a slow first fetch of the
+      // manifest does not trip the stall clock.
+      hls.on(Hls.Events.MANIFEST_LOADING, waitAgain);
+      hls.on(Hls.Events.MANIFEST_LOADED, waitAgain);
+      hls.on(Hls.Events.FRAG_LOADED, waitAgain);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         setOutcome({ src, status: "ready" });
@@ -157,6 +186,8 @@ export function useHls(
 
     return () => {
       clearTimeout(stall);
+      video.removeEventListener("progress", waitAgain);
+      video.removeEventListener("loadstart", waitAgain);
       cancelled = true;
       instance?.destroy();
       hlsRef.current = null;
