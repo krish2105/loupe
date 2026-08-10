@@ -42,7 +42,16 @@ def spoken(script: str) -> str:
 
 
 def render(talk, workspace: Path) -> Path:
-    """Speech plus a still frame, because the platform stores video."""
+    """
+    Speech plus a still frame, because the platform stores video.
+
+    Rendered at 720p even though the picture carries nothing. The ladder never
+    upscales — correctly — so a 360p source produces exactly one rendition, and
+    a single-rung stream means no adaptive bitrate to demonstrate and a quality
+    control that correctly refuses to appear. A still image compresses to a
+    fraction of its target bitrate, so three rungs of 720p cost less than the
+    resolution suggests.
+    """
     aiff = workspace / f"{talk.slug}.aiff"
     mp4 = workspace / f"{talk.slug}.mp4"
 
@@ -56,7 +65,7 @@ def render(talk, workspace: Path) -> Path:
     subprocess.run(
         [
             "ffmpeg", "-v", "error", "-y",
-            "-f", "lavfi", "-i", "color=c=0x1f1f1f:s=640x360:r=5",
+            "-f", "lavfi", "-i", "color=c=0x1f1f1f:s=1280x720:r=5",
             "-i", str(aiff),
             "-c:v", "libx264", "-preset", "veryfast", "-tune", "stillimage",
             "-c:a", "aac", "-b:a", "96k", "-shortest",
