@@ -9,6 +9,12 @@ sequence of function calls.
 
 This document is about those two decisions, what they cost, and where they leak.
 
+It has since acquired a third subject. Both original decisions were made before
+any media provider existed, so the boundary that was supposed to keep storage
+credentials in one place was a claim rather than a constraint. Provisioning
+storage tested it, and [the storage boundary](#the-storage-boundary-tested-for-real)
+records what held and what had to change.
+
 ## The problem with a small catalogue
 
 A video platform with forty videos does not look like a video platform. It looks
@@ -98,6 +104,12 @@ baseline, which is documented in `docs/recommendations.md`.
 Turning an uploaded file into something you can ask questions about takes six
 steps. Each one is slow, each one can fail, and one of them costs money.
 
+For most of this project the first transition had nothing behind it. Transcoding
+was the media provider's job, the provider was never provisioned, and every
+video in the catalogue arrived already `transcoded`, pointing at somebody else's
+stream. The machine described a step that had never run. It runs now, on ffmpeg,
+and the description below finally matches the code.
+
 ```
 uploaded → transcoding → transcoded → transcribing → transcribed
         → chunking → embedding → indexed → enriched
@@ -131,7 +143,7 @@ class Step:
     failed: str | None
 ```
 
-Four steps are declared this way. A `failed` of `None` means the step degrades
+Five steps are declared this way. A `failed` of `None` means the step degrades
 rather than breaks: enrichment produces chapters and a summary, and a video
 without them is still fully watchable and searchable, so a failure there returns
 the video to `indexed` instead of parking it.
@@ -193,6 +205,29 @@ selected instead of looping.
 Testing the machine rather than the work is why these tests run in
 CI without a GPU, an ASR model, or a media provider. The steps are injected.
 
+### Declining is not failing
+
+A stage machine records two outcomes: the step worked, or the video is broken.
+That is one outcome too few.
+
+Running the pipeline against the live catalogue would have parked six healthy
+videos as `failed_transcribing`. They sit at `transcoded` with a referenced
+stream, so there is no source file in our storage to extract audio from; a real
+recogniser handed one of those raises, and the machine faithfully records the
+video as broken. It is not broken. It is not ours to transcribe.
+
+So transcribers declare whether they need an audio file — real ones do, the
+fixture does not — and the runner filters the eligible set before claiming any
+jobs. The count of declined videos is reported rather than swallowed, because a
+catalogue where most talks are quietly skipped is something an operator should
+be told rather than left to infer.
+
+The general shape is worth naming: a step that cannot run is different from a
+step that ran and failed, and a machine with only the second concept will
+mislabel the first. This was found by checking what a run *would* touch before
+running it against a database holding live data, which is the only reason it is
+a paragraph here rather than an incident.
+
 ## What the split between services buys and costs
 
 Five services, split by what they are allowed to know:
@@ -200,9 +235,9 @@ Five services, split by what they are allowed to know:
 | Service | Owns | Never |
 |---|---|---|
 | Core API | CRUD, authorisation, feed assembly | Calls a model, holds a media credential |
-| Media | Bunny signing, webhook handling | Anything else |
+| Media | Upload tickets, storage signing, playlist rewriting | Anything else |
 | Ingest | The nightly Class B sync, the quota ledger | Runs at request time |
-| Pipeline | Transcription through enrichment | Serves a request |
+| Pipeline | Transcoding through enrichment | Serves a request, holds a storage key |
 | AI | Summaries, ask-video, semantic search, playlists | Verifies a session token |
 
 The last row is the one that keeps paying. The AI service holds every prompt and
@@ -221,6 +256,52 @@ For this scale a single process would be faster and simpler. The split earns its
 keep for a different reason: the boundaries are where the rules live. "The API
 never calls a model" is enforced by the API not having a model client, which is
 harder to violate accidentally than a comment saying not to.
+
+## The storage boundary, tested for real
+
+"The media service is the only holder of provider credentials" was a claim for
+eleven phases, because no provider existed. Provisioning one turned it into a
+design constraint with teeth, and two decisions came directly out of it.
+
+**The transcoder holds no storage credentials.** It has to read a source object
+and write a few hundred rendition objects, so it needs signed URLs, and there
+were three ways to get them: copy the keys into a second service, import the
+media service's signing code, or ask. It asks, over a token-gated endpoint.
+
+Copying would have made the claim false. Importing would have meant either
+duplicating SigV4 — two implementations of a signature is two things to get
+subtly wrong, and the second always drifts — or a path dependency between two
+packages that both export a top-level `app` module, which does not resolve. So
+the remaining option was the one that also happens to be right: a round trip per
+object, in exchange for rotating the storage key touching one service and a
+compromised transcoder minting URLs only while it can still reach the signer.
+
+**The bucket is private, and the constraint improved the design.** It was
+forced — the provider gates public buckets behind payment history — and a public
+bucket would have been simpler: the player fetches segments directly and nothing
+needs signing. That convenience is exactly the problem. A public URL works
+forever, so a takedown has to delete the object because nothing else can revoke
+access, and this platform accepts uploads and owes a removal that removes.
+
+Private means playlists are rewritten on the way out. The media service fetches
+the manifest, replaces every URI, and returns it; only the manifest — a few
+kilobytes — crosses the process, while segments travel bucket-to-viewer
+directly. Segments resolve to presigned URLs; nested playlists resolve back to
+the same endpoint, because signing a child playlist's segments at the moment its
+parent was fetched means a viewer who starts an hour later meets a wall of 403s.
+
+**What the row stores is a key, not a URL.** `video_assets.hls_url` holds an
+absolute URL for referenced streams and a bucket key for anything the transcoder
+produced. A URL would bake the media service's hostname into every row, so
+moving the service would mean rewriting the table, and a signed URL would expire
+in place. The row records *what* the asset is; each service renders *where* at
+the moment it answers.
+
+That last decision cost a bug before it paid: the core API returned the key raw
+for a while, and the watch page fed it straight to the player as a relative path
+that resolved against the web app's own origin. The fix is a pure function with
+tests, and the tests assert the media service's route rather than the shape the
+mistake produced.
 
 ## Two schema decisions worth defending
 
@@ -301,21 +382,59 @@ The recommendation model lost to a popularity baseline, partly because content
 similarity is computed over 3,000 near-identical fixture descriptions.
 
 AI playlist composition returns talks separated by five thousandths of a
-similarity point, because the eight indexed transcripts come from one template
-and there is nothing to discriminate between them.
+similarity point, because the indexed transcripts came from one template and
+there was nothing to discriminate between them.
 
-Each of those has its own writeup. Together they say something the individual
-documents do not: this architecture is verified to be wired correctly and is not
-verified to be any good. Those are different claims, and a synthetic corpus can
-only support the first one. Every quality number in this project is reported
-with that caveat attached, because the alternative is reporting a number that
-means nothing and hoping nobody asks.
+Together they said something the individual documents did not: this architecture
+is verified to be wired correctly and is not verified to be any good. Those are
+different claims, and a synthetic corpus can only support the first.
+
+### What changed when the corpus stopped being synthetic
+
+Eight talks now carry real speech and real recognition output. That is a small
+corpus and clean audio, so it does not settle the question — but it moved the
+second claim from unsupportable to partially measured, and the first thing it
+did was find a defect the architecture had been hiding.
+
+Citation accuracy scored 0.600 on fixtures. The golden set read its expected
+timestamps from chunk boundaries, and a citation returned the chunk's start
+time, so the metric was checking that a citation equals the chunk start — true
+by construction. Anchoring expected timestamps on the sentence that actually
+answers the question dropped it to 0.053, and the cause was not retrieval. The
+system promised a jump to *the moment* and returned the top of a three-minute
+passage. The word-level timestamps needed to do better had been a hard schema
+requirement from the start, and nothing had ever read them. Reading them, and
+picking the answering sentence by embedding rather than by word overlap, took it
+to 0.421 — eight times better than what the 0.600 was concealing, and still not
+good, since a ±5s tolerance is roughly one sentence of speech.
+
+This is the useful lesson of the whole project, and it is not about video. **A
+metric computed over data you generated will confirm the assumptions you built
+into both.** The stage machine, the constraints, the service boundaries and the
+idempotency were all genuinely right; the thing that was wrong sat in the gap
+between what a citation promised and what it returned, and no amount of
+architectural care would have surfaced it. Only a corpus the architecture did
+not author could.
+
+What remains unmeasured is still substantial: real recordings with accents and
+crosstalk, a catalogue large enough for retrieval precision to mean something,
+and any interaction data at all. Every quality number in this project is
+reported with the caveat that applies to it, because the alternative is
+reporting a number that means nothing and hoping nobody asks.
 
 ## Reading the code
 
 - Content classes and constraints: `db/migrations/0002_core_content.sql`
+- Channel ownership: `db/migrations/0013_channel_ownership.sql`
 - Schema assertions: `db/tests/constraints.sql`
-- Stage machine: `services/pipeline/app/stages.py`
+- Stage machine, and declining vs failing: `services/pipeline/app/stages.py`,
+  `services/pipeline/app/run.py`
+- Transcoding and the rendition ladder: `services/pipeline/app/transcode.py`,
+  `services/pipeline/app/ladder.py`
+- Storage signing, written out rather than imported: `services/media/app/s3.py`
+- Playlist rewriting for a private bucket: `services/media/app/playlist.py`
+- Key-to-URL rendering: `services/api/app/playback.py`
+- Citing a moment rather than a passage: `services/ai/app/moments.py`
 - Cost ceiling: `services/pipeline/app/budget.py`
 - Collection abstraction: `services/api/app/routers/collections.py`
 - Retrieval and the refusal threshold: `services/ai/app/retrieval.py`
