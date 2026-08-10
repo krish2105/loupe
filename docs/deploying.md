@@ -429,3 +429,37 @@ roughly a hundred talks.
 Nothing about the pipeline changes when it moves. It holds no bucket
 credentials and no ports; it asks the media service to sign, does the work, and
 writes rows.
+
+
+## Cold starts, and the budget that limits what you can do about them
+
+Render's free web services spin down after 15 minutes of inactivity and take
+most of a minute to wake. On a video page that is indistinguishable from a
+broken player, and it is the single most likely thing to look like a fault
+during a demonstration.
+
+`.github/workflows/warm.yml` pings the API and the media service every ten
+minutes during an eight-hour window. The window is not timidity — it is
+arithmetic:
+
+```
+750 instance-hours per workspace per month, shared across every free service
+a calendar month is about 730 hours
+one service awake around the clock  ≈ 730 h   → starves the other two
+all three awake around the clock    ≈ 2,190 h → impossible
+
+2 services x 8 h x 30 days = 480 h, leaving ~270 h for the AI service and
+for real traffic
+```
+
+Widening it to 24 hours exhausts the allowance in about three weeks, after
+which **every** service is down — considerably worse than a slow first load.
+
+The AI service is deliberately not warmed. It is needed only once somebody asks
+a question, by which point they are on a page and a pause is explainable.
+
+GitHub delays scheduled workflows under load, sometimes past the 15-minute
+spin-down window, so this reduces cold starts rather than eliminating them. A
+dedicated uptime monitor pinging every five minutes is more reliable and also
+free. This lives in the repository because it needs no additional account and
+is visible in the codebase rather than in somebody's browser tab.

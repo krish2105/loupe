@@ -1,0 +1,74 @@
+name: Keep services warm
+
+# Render's free web services spin down after 15 minutes of inactivity and take
+# most of a minute to wake. On a video page that is indistinguishable from a
+# broken player: the first request after a quiet spell hangs, and someone
+# demonstrating the project gets a black rectangle at exactly the wrong moment.
+#
+# This pings them so the first visitor of the day is not the one who pays.
+#
+# ---------------------------------------------------------------- the budget
+#
+# Read this before widening the window, because the naive version does not fit.
+#
+# Render grants 750 instance-hours per *workspace* per month, shared across
+# every free service, and a spun-down service consumes none. A calendar month is
+# about 730 hours. So keeping a single service awake around the clock costs
+# ~730 of the 750 and starves the other two; keeping all three awake costs
+# ~2,190 and is impossible.
+#
+# The window below is eight hours a day across two services:
+#
+#     2 services x 8 h x 30 days  =  480 h
+#     leaving ~270 h for the AI service and for real traffic
+#
+# The AI service is deliberately not warmed. It is only needed once somebody
+# asks a question, by which point they are already on a page and a pause is
+# explainable — unlike a player that will not start.
+#
+# Widening this to 24 hours would exceed the allowance in three weeks and every
+# service would then be down, which is a considerably worse outcome than a slow
+# first load.
+#
+# --------------------------------------------------------------- reliability
+#
+# GitHub delays scheduled workflows under load, sometimes past the 15-minute
+# spin-down window, so this reduces cold starts rather than eliminating them.
+# A dedicated uptime monitor pinging every 5 minutes is more reliable and also
+# free; this lives here because it needs no additional account and is visible
+# in the repository rather than in somebody's browser tab.
+
+on:
+  schedule:
+    # Every 10 minutes between 04:00 and 11:59 UTC — 09:30 to 17:30 in
+    # India, where this is being demonstrated. Change both the hours and the
+    # comment together, and check the arithmetic above first.
+    - cron: "*/10 4-11 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # A delayed run and an on-time one overlapping would just double the pings.
+  group: warm
+  cancel-in-progress: true
+
+jobs:
+  warm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Wake the services on the playback path
+        run: |
+          # The web app is on Vercel and never sleeps. The API serves every page
+          # and the media service serves every playlist, so a cold one of either
+          # is visible immediately. Both are pinged; failures are reported and
+          # do not fail the run, because a service being down is not something
+          # this workflow can fix and a red cross every ten minutes trains
+          # everyone to ignore it.
+          for service in loupe-api loupe-media; do
+            code=$(curl -s -o /dev/null -m 90 -w "%{http_code}" \
+              "https://$service.onrender.com/health" || echo "000")
+            printf '%-14s %s\n' "$service" "$code"
+          done
