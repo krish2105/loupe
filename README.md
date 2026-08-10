@@ -6,16 +6,23 @@ Search *inside* a talk, ask it questions and get answers that cite the exact
 moment, and land on that moment with one click. Built on an owned catalogue,
 because transcripts are what every interesting feature here depends on.
 
-> **Status: Phase 10 of 11 complete, plus audio mode.** The plan's roadmap ends
-> at Phase 10; [ADR 0003](docs/adr/0003-audio-mode.md) scheduled audio mode
-> after it, and that is now built. Every phase in the plan is
-> built. Five of eleven gates are met outright, five are partial, and one is
-> not met; each is reported individually below with what is missing. Nothing
-> here is rounded up. See [gate status](#gate-status).
+> **Status: every phase in the plan is built, plus audio mode and its own media
+> pipeline.** [ADR 0003](docs/adr/0003-audio-mode.md) scheduled audio mode after
+> the roadmap; that is built. Beyond the plan, the platform now transcodes,
+> transcribes and serves its own video — see [Owning the
+> media](#owning-the-media). Gates are reported individually below with what is
+> missing, and nothing is rounded up. See [gate status](#gate-status).
 >
-> The single largest caveat: the corpus is synthetic, so this codebase is
-> verified to be wired correctly and is **not** verified to be good. Those are
-> different claims and the difference is documented everywhere it applies.
+> **What changed the honesty of this document:** the catalogue used to point at
+> a test stream with no speech, so every transcript was fixture output and every
+> metric described nothing. Eight talks now carry real audio, transcribed by
+> whisper-large-v3-turbo, playing from storage this project owns. That is a
+> genuine step and a bounded one — the speech is synthesised, so it is far
+> cleaner than any recording of a real room, and eight talks is a small corpus.
+>
+> The first thing the real corpus did was expose a defect the fixture metrics
+> had been hiding for months. That story is in [Evaluation](#evaluation), and it
+> is the most useful thing here.
 
 ---
 
@@ -51,14 +58,15 @@ constraints reject it. See [`db/tests/constraints.sql`](db/tests/constraints.sql
                         │             │                │
               ┌─────────▼───┐  ┌──────▼──────┐  ┌──────▼───────┐
               │ services/   │  │ services/   │  │ services/    │
-              │ api  :8010  │  │ ai   :8031  │  │ media        │
+              │ api  :8010  │  │ ai   :8031  │  │ media :8002  │
               │             │──►             │  │              │
-              │ CRUD, auth, │  │ summarise,  │  │ Bunny signing│
-              │ feed, lists │  │ ask, search,│  │ webhooks     │
-              │             │  │ playlists   │  │              │
-              │ never calls │  │ never sees  │  │ the only     │
-              │ a model     │  │ a user      │  │ holder of a  │
-              └──────┬──────┘  └──────┬──────┘  │ provider key │
+              │ CRUD, auth, │  │ summarise,  │  │ upload       │
+              │ feed, lists │  │ ask, search,│  │ tickets,     │
+              │             │  │ playlists   │  │ playlist     │
+              │ never calls │  │ never sees  │  │ signing —    │
+              │ a model     │  │ a user      │  │ the only     │
+              └──────┬──────┘  └──────┬──────┘  │ holder of a  │
+                     │                │         │ storage key  │
                      │                │         └──────┬───────┘
                      └────────┬───────┴────────────────┘
                               │
@@ -69,13 +77,18 @@ constraints reject it. See [`db/tests/constraints.sql`](db/tests/constraints.sql
                   │  videos, chunks,       │        └──────────────────┘
                   │  watch_events,         │        ┌──────────────────┐
                   │  chapters, summaries   │◄───────┤ services/pipeline│
-                  └───────────┬────────────┘        │ ASR → chunk →    │
-                              │                     │ embed → chapters │
-                  ┌───────────▼────────────┐        └──────────────────┘
-                  │ services/eval          │
-                  │ services/recsys        │  offline, read the same tables
-                  └────────────────────────┘
+                  └───────────┬────────────┘        │ transcode → ASR  │
+                              │                     │ → chunk → embed  │
+                  ┌───────────▼────────────┐        │ → chapters       │
+                  │ services/eval          │        └────────┬─────────┘
+                  │ services/recsys        │                 │ holds no
+                  └────────────────────────┘                 │ storage key;
+                                                             │ asks media
+                                                             ▼ to sign
+                                                    Backblaze B2 (private)
 ```
+
+`eval` and `recsys` are offline and read the same tables.
 
 The boundaries are load-bearing rather than decorative. When AI playlists needed
 to be saved as playlists owned by a real person, composition stayed in the AI
@@ -89,7 +102,7 @@ Full reasoning, including what the split costs:
 
 | Area | State |
 |---|---|
-| Database schema | All §6 entities, 10 migrations, 21 constraint assertions passing |
+| Database schema | All §6 entities, 13 migrations, 24 constraint assertions passing |
 | Catalogue | 3,048 referenced talks across 37 channels, 17 owned |
 | Ingest worker | Nightly sync, quota ledger, fails closed, idempotent |
 | Pipeline | Stage machine, normalise, chunk, embed, chapter detection |
@@ -104,15 +117,18 @@ Full reasoning, including what the split costs:
 | Player | Adaptive HLS, chapter-segmented scrubber, §9.1 keyboard, resume |
 | Player abstraction | Seek/play/pause/time store, verified against a real stream |
 | Progress + resume | Append-only writes with JWT auth; endpoints tested against Postgres |
-| Media service | Bunny upload signing, webhook, signed playback URLs — **provider calls unverified** |
+| Media storage | S3-compatible (Backblaze B2), hand-written SigV4, private bucket — **verified against live storage** |
+| Upload | Browser → presigned PUT straight to the bucket, progress, cancel — **verified end to end** |
+| Transcoding | ffmpeg → HLS ladder, never upscales, offers the source height — **verified on real files** |
+| Channel ownership | One channel per person, created on first upload; uploads land private |
+| Bunny path | Signing and webhook written and tested — **provider calls still unverified** |
 | Auth | Sign-in, sign-up and session refresh, **verified end to end in a browser** |
 | Core API | FastAPI, health, pipeline dashboard, watch events, resume, collections |
 | CI | Nine jobs: web, API, AI, eval, recsys, media, ingest, pipeline, schema |
-| Staging deploy | Live at [web-jade-two-b023n56l0y.vercel.app](https://web-jade-two-b023n56l0y.vercel.app) |
+| Deployed | Live at [loupe-pied.vercel.app](https://loupe-pied.vercel.app) — three services on Render, Supabase, Backblaze B2, **£0/month** |
 
-Test counts: 114 web, 96 API, 53 AI, 40 eval, 43 recsys, 15 auth, 12 media,
-19 ingest, 49 pipeline, 21 schema assertions. **462 in total**, all green in CI
-across ten jobs.
+Test counts: 150 web, 122 API, 72 AI, 70 pipeline, 43 recsys, 41 media, 40 eval,
+19 ingest, 15 auth, 24 schema assertions. **572 in total**.
 
 Seed a browsable catalogue locally with:
 
@@ -122,6 +138,58 @@ psql "$DATABASE_URL" -f db/seed/0001_demo_catalogue.sql
 
 That gives 9 owned talks (6 indexed, 3 mid-pipeline) and 48 referenced ones —
 roughly the §4.1 shape of a real platform with an indexing backlog.
+
+## Owning the media
+
+For most of this project the catalogue pointed at somebody else's test stream.
+Every talk shared one URL, every duration was a seeded guess, and `upload`
+answered 503 because no media provider had ever been provisioned. The pipeline
+that was supposed to process video had never processed any.
+
+That is now closed. A file uploaded in the browser goes straight to a private
+bucket, is transcoded into an HLS ladder, transcribed, chunked, embedded and
+indexed, and plays back through the platform's own media service.
+
+```
+browser ──presigned PUT──► Backblaze B2 (private)
+                                  │
+                          transcoder (ffmpeg)
+                                  │  reads source, writes renditions
+                                  ▼
+                    videos/<id>/hls/{master,360p/…}.m3u8
+                                  │
+browser ──► media service ──signs each playlist on request──► B2
+                 │                        segments fetched direct
+                 └── the only holder of storage credentials
+```
+
+**The bucket is private, and that turned out to be the better design.** It was
+forced — Backblaze gates public buckets behind payment history — but a public
+bucket hands out URLs that work forever, which means a takedown has to delete
+the object because nothing else can revoke access. Signed, expiring URLs give
+that back. It also kills a bug class this project had already hit: a permanent
+URL cached in `localStorage` is exactly what broke playback once.
+
+**Signing is written out rather than imported.** boto3 pulls roughly 50 MB to
+produce a query string, and a SigV4 signature is a pure function of its inputs,
+so it can be pinned to a fixed timestamp and anchored on a known value. It was
+verified against live storage including a key containing a space, a plus and an
+ampersand, which is the case that separates a signer that works from one that
+works on easy input.
+
+**The transcoder holds no storage credentials.** It asks the media service to
+sign each URL through a token-gated endpoint, which is the only arrangement
+that keeps "sole holder of provider credentials" true. Copying the keys into a
+second service would have made that claim false.
+
+**The ladder never upscales, and always offers the source height.** Both rules
+fail silently. A 480p talk encoded at 720p is a bigger file that looks
+identical; and a fixed 360/540/720 ladder gives a 480p source only its 360p
+rung, so the talk plays *worse than the file that was uploaded* and nothing
+reports a problem.
+
+It runs on free infrastructure and the constraint is real rather than
+decorative — see [Cost](#cost) and [Limitations](#limitations).
 
 ## Running it
 
@@ -144,8 +212,9 @@ project: [`docs/running.md`](docs/running.md).
 
 ## Deploying it
 
-The web app is on Vercel. Nothing else is deployed yet, which is why the staging
-URL browses and does not do anything.
+All of it is deployed and working: the web app on Vercel, three services on
+Render, Postgres on Supabase, media in Backblaze B2. Sign in, browse, watch a
+talk the platform transcoded itself, and ask it a question.
 
 `render.yaml` is a Blueprint covering the API, the AI service and the media
 service. The two batch jobs — nightly ingest and the pipeline — run from
@@ -156,23 +225,37 @@ long-running processes §14 put on Render.
 Step-by-step, with what each step unblocks and the free-tier behaviours that
 otherwise look like bugs: [`docs/deploying.md`](docs/deploying.md).
 
-Four accounts are needed and none can be created on your behalf: Supabase
-(database and auth in one free tier), Render, Vercel, and optionally Bunny for
-uploads.
+Five accounts are needed and none can be created on your behalf: Supabase
+(database and auth in one free tier), Render, Vercel, Backblaze B2 for storage,
+and Groq for transcription. All are free tiers; two of them want a card on file
+without charging it, which is worth knowing before starting.
 
 The single most likely thing to be wrong after a first deploy is `CORS_ORIGINS`.
 Missing CORS is how comments, likes, saves and progress writes shipped broken
 for four phases with every server-side test passing, and the symptom is a
 browser console full of preflight failures while `curl` works perfectly.
 
+Two more, both learned the slow way:
+
+- **A pasted value can be wrong by one character and look present.** An
+  `S3_ENDPOINT` ending `backblazeb2.co` instead of `.com` produced a bare 500
+  on every playlist while every configuration check reported the variable set.
+  `/health` on the media service now names any missing variable, and a failed
+  bucket fetch returns 502 with the reason rather than 500 with none.
+- **A database password containing `@` must be percent-encoded.** Otherwise the
+  URL splits at the wrong place and Postgres reports a username that does not
+  exist, which sends you looking in entirely the wrong direction. `db/url.sh`
+  does the encoding without echoing anything.
+
 ## Repository layout
 
 ```
 web/              Next.js app — all UI, routing, session
 services/api/     FastAPI core API — CRUD, feed assembly, search orchestration
-services/media/   Upload signing, provider webhooks, playback URL signing
+services/media/   Upload tickets, S3 signing, playlist rewriting for a private
+                  bucket — the only holder of storage credentials
 services/ingest/  Nightly referenced-content sync, quota accounting
-services/pipeline/ Transcription, chunking, embedding, chapter detection
+services/pipeline/ Transcoding, transcription, chunking, embedding, chapters
 services/ai/      Summarising, ask-video, semantic search, playlist composition
                   — the only service that holds a model key or a prompt
 services/auth/    Development-only identity provider. Refuses to start outside
@@ -180,17 +263,24 @@ services/auth/    Development-only identity provider. Refuses to start outside
 services/eval/    Golden set, metrics, and the evaluation runner
 services/recsys/  Personas, candidate generation, ranking, offline evaluation
 db/               SQL migrations, constraint tests, migration runner,
-                  url.sh for building a connection URL, and setup-hosted.sh
-                  for preparing a hosted database
+                  url.sh for building a connection URL, setup-hosted.sh for
+                  preparing a hosted database, and seed/corpus/ — eight talks
+                  rendered to speech, the only real audio this project has
 dev.sh            Starts everything locally
 render.yaml       Render Blueprint for the three web services
 docs/             Plan, architecture writeup, decisions, ADRs, evaluation
 ```
 
-The §5 service boundaries hold from Phase 0: the core API never holds media
-provider credentials and never calls an LLM, and the media service is the only
-thing that has ever seen a Bunny key. A playback URL leaves that service already
-signed, so swapping providers touches one directory.
+The §5 service boundaries hold from Phase 0: the core API never holds storage
+credentials and never calls an LLM, and the media service is the only thing
+that has ever seen a storage key. A playback URL leaves it already signed, so
+swapping providers touches one directory — which stopped being a claim and
+became a fact when Backblaze replaced Bunny in an afternoon.
+
+The transcoder tests that boundary hardest, because it needs to read and write
+the bucket and holds no credentials for it. It asks the media service to sign
+each URL instead. That costs a round trip and buys a real property: rotating the
+storage key touches one service.
 
 ## Design
 
@@ -214,20 +304,20 @@ Reported per §18.1. Nothing here is rounded up.
 
 | Phase | Gate | Status |
 |---|---|---|
-| 0 — Foundations | A logged-in user sees an empty shell on a public URL | **MET locally, PARTIAL on the public URL** — sign-in works end to end against the development identity provider; the deployed instance still has no auth backend ([detail](#phase-0-detail)) |
-| 1 — Media spine | One video plays adaptively with working seek and resume | **PARTIAL** — plays and seeks; upload and transcode blocked on Bunny credentials |
+| 0 — Foundations | A logged-in user sees an empty shell on a public URL | **MET** — sign-in works end to end locally and on the deployed instance ([detail](#phase-0-detail)) |
+| 1 — Media spine | One video plays adaptively with working seek and resume | **MET** — and beyond the gate: a file uploaded in the browser is transcoded, stored and played back from storage this project owns, verified on the deployed site |
 | 2 — Core surfaces | A visitor can browse, watch, and comment | **MET** — all three verified in a browser, including a comment posted through the real API |
 | 3 — Identity surfaces | All four built on the shared list abstraction, not four one-offs | **MET** — one `Collection` declaration each, one loader, one web component behind four routes. Likes, saves and subscriptions now verified writing through from the browser |
 | 4 — Referenced ingest | 1,500+ Class B videos in the feed; unavailable states designed | **MET** — 3,048 across 37 channels, with designed unavailable states. From a fixture provider, not the real API |
-| 5 — Pipeline | 50 hours indexed; stage machine survives forced failure injection | **PARTIAL** — failure injection met and tested; 7 hours indexed, not 50 |
-| 6 — AI layer | Citation-seek works end to end; refusal behaviour verified | **MET** — clicking a citation seeks the player; refusal verified by tests and by the eval harness. On fixture transcripts |
+| 5 — Pipeline | 50 hours indexed; stage machine survives forced failure injection | **PARTIAL** — failure injection met and tested; the transcode-to-index chain now runs on real files, but the corpus is far under 50 hours |
+| 6 — AI layer | Citation-seek works end to end; refusal behaviour verified | **MET** — clicking a citation seeks the player; refusal verified by tests and by the eval harness, now against real transcripts. Citation *precision* is separately reported and is weak |
 | 7 — Evaluation | Numbers and methodology in the README | **MET** — both below, including the sweep result that was deliberately not adopted |
 | 8 — Shorts | No stutter on a mid-range Android device | **NOT MET** — no such device available, and the browser used for verification fires no scroll or IntersectionObserver events |
 | 9 — Recsys | Beats popularity baseline, or the failure is analysed | **MET via the second clause** — it loses, and [`docs/recommendations.md`](docs/recommendations.md) is the analysis |
-| 10 — Ship | Public URL, three-minute demo, architecture writeup | **PARTIAL** — URL and writeup done; the demo exists as a shot-by-shot script, because recording video is not something I can do |
+| 10 — Ship | Public URL, three-minute demo, architecture writeup | **PARTIAL** — URL and writeup done, now serving the platform's own media; the demo exists as a shot-by-shot script, because recording video is not something I can do |
 
-Seven met, three partial, one not met. Every remaining partial is blocked on
-either a credential or hardware, and each one says which.
+Eight met, two partial, one not met. Both remaining partials need a corpus or
+hardware rather than code, and each says which.
 
 The design system is frozen as of Phase 2, per §18.3.
 
@@ -235,31 +325,28 @@ The design system is frozen as of Phase 2, per §18.3.
 
 The gate is: *a logged-in user sees an empty shell on a public URL.*
 
-**MET locally. PARTIAL on the public URL.**
+**MET.**
 
 | Clause | State |
 |---|---|
-| Public URL | **Met.** <https://web-jade-two-b023n56l0y.vercel.app> returns 200 on `/`, `/login`, and `/system` |
+| Public URL | **Met.** <https://loupe-pied.vercel.app> returns 200 on every route, and serves video from storage this project owns |
 | Empty shell | **Met.** Both themes, all surfaces |
-| Logged-in user | **Met locally.** Sign-up, sign-in, session refresh and a signed-in shell all verified in a browser against `services/auth` |
+| Logged-in user | **Met.** Sign-up, sign-in, session refresh and a signed-in shell verified in a browser, locally against `services/auth` and on the deployed instance against Supabase |
 
-What is still missing is a hosted auth backend for the deployed instance, which
-needs a Supabase project — an account I cannot create on someone else's behalf.
-The local provider exists precisely because that blocked verification of five
-gates for eleven phases ([ADR 0004](docs/adr/0004-development-identity-provider.md)).
+This gate was partial for eleven phases because hosted auth needs an account
+that cannot be created on somebody else's behalf. `services/auth`
+([ADR 0004](docs/adr/0004-development-identity-provider.md)) exists precisely
+so that five gates were not held hostage to that, and it did its job: when the
+Supabase project arrived, the application code needed no changes, because it
+had been speaking the same API all along.
 
-**To close the remaining clause** (about ten minutes):
-
-1. Create a free Supabase project.
-2. Put `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in
-   `web/.env.local`, and add both to the Vercel project's environment.
-3. Apply the schema to it:
-   ```bash
-   DATABASE_URL="<supabase pooler url>" ./db/migrate.sh
-   psql "$DATABASE_URL" -f db/migrations/supabase/0001_auth_link.sql
-   ```
-4. Redeploy. No application code changes: the same client, the same token
-   verification, a different issuer.
+Closing it also surfaced two things worth recording. The project signs tokens
+with ES256 rather than the legacy HS256 secret, so verification had to handle
+both — chosen by the token's own `alg`, with the two paths never sharing key
+material. And a publishable key and a JWT secret look alike enough that the
+wrong one was pasted into a `NEXT_PUBLIC_` variable once; the config now refuses
+anything that is not a browser-safe key rather than shipping it to every
+visitor.
 
 ### What signing in unblocked
 
@@ -278,34 +365,82 @@ round trip from a browser. All six now have:
 
 ## Evaluation
 
-**There is no benchmark yet, and that is deliberate.**
+**Still no benchmark. But the transcripts are real now, and the first thing
+they did was expose a defect the fixture metrics had been hiding.**
 
-The harness, the metrics, and a hand-labelled golden set all exist and run. The
-corpus does not deserve a benchmark: the owned talks point at a test stream
-with no speech, so the transcripts are fixture output. Numbers computed over
-invented transcripts would be arithmetically correct, would look exactly like a
-benchmark, and would mean nothing.
-
-What the harness did find, on its first run over the fixture corpus:
+Eight talks are spoken aloud and transcribed by whisper-large-v3-turbo. Against
+a golden set of 36 cases, with questions written from the topics rather than by
+reading the transcripts:
 
 ```
-refusal accuracy    0.792      adversarial category   4/8
-false answer rate   0.357  ←   out_of_scope           5/6
-citation accuracy   0.600      factual               10/10
+refusal accuracy    0.889      adversarial      8/8    was 4/8
+false answer rate   0.000  ←   cross_video      4/4    was undefined
+citation accuracy   0.421      out_of_scope     5/5
+word error rate     0.048      factual        15/19
 ```
 
-Five of fourteen questions that should have been refused were answered, and the
-failures concentrate in the adversarial category — domain-adjacent questions
-that sound like the talk but are not in it. §11.1 names this precise failure
-mode and the harness found it immediately.
+### The improvements are not fixes
 
-A threshold sweep shows 0.50 would score a perfect 1.000 on this set. **It has
-not been adopted**, because picking the value that maximises a 24-case fixture
-score is fitting the threshold to the fixture — the published number would
-improve and the product would be no more trustworthy.
+The fixture run answered five of fourteen questions it should have refused. The
+same threshold, unchanged, now refuses all thirteen. **Nothing about the
+refusal logic changed.** The fixture corpus was one document repeated, so every
+question retrieved something scoring highly and the threshold had no distance
+to work with; six different talks give it some. The entire improvement is
+attributable to data, and the same threshold over two thousand talks may be
+wrong again in the other direction.
 
-Full results, methodology, and what would make this a real benchmark:
-[`docs/evaluation.md`](docs/evaluation.md).
+### The citation metric had been confirming a tautology
+
+The fixture set scored **0.600** and, in its own words, read its expected
+timestamps "from real chunk boundaries". A citation returned the chunk's start
+time. So the metric was checking that a citation equals the chunk start, which
+is true by construction.
+
+Anchoring expected timestamps on the sentence that actually answers the
+question dropped it to **0.053** — and the cause was not retrieval. §11.1
+promises a citation lets you jump to *the moment*; what came back was the top of
+a three-minute passage. The word-level timestamps needed to do better had been a
+hard requirement since §10.2, and nothing had ever read them.
+
+Fixed in two measured steps:
+
+```
+citing the chunk start                  0.053
++ sentence picked by word overlap       0.263
++ sentence picked by embedding          0.421
+```
+
+The middle step was not enough on its own, and the reason is the useful part:
+nine of nineteen citations landed six to fourteen seconds out, which is one or
+two sentences. Sentences inside one passage are all about the same subject and
+differ by shades that shared vocabulary cannot capture.
+
+**0.421 is not good.** A ±5s tolerance is roughly one sentence of speech, so a
+citation that picks the sentence before the right one already fails. It is
+reported because it is true and because it is eight times better than what the
+0.600 was concealing.
+
+### The threshold has inverted
+
+The fixture run concluded it was too permissive. On real speech, 0.42 refuses
+four answerable questions and 0.38 maximises accuracy. **0.42 is kept anyway**,
+because §11.1 is explicit that a confident wrong answer is the failure that
+matters, and 0.42 is the lowest threshold with none of them. That is a product
+decision, not a metric to maximise.
+
+### What this still is not
+
+The speech is synthesised: no accents, no crosstalk, no room, no disfluencies,
+no microphone at the back of a lecture theatre. Every one of those hurts, and
+none is present. Some of the 4.8% word error rate is not error at all — the
+scripts spell numbers out and the transcriber writes digits.
+
+Eight talks is a small corpus, and precision over it is generous by
+construction, which the talk about fooling yourself when evaluating retrieval —
+itself in the corpus — says.
+
+These are upper bounds. Full methodology, the threshold sweep, and what would
+make this a benchmark: [`docs/evaluation.md`](docs/evaluation.md).
 
 ## Recommendations
 
@@ -371,56 +506,71 @@ Both findings: [`docs/ai-playlists.md`](docs/ai-playlists.md).
 
 ## Cost
 
-§14 sets a target of under $10 a month. Actual spend to date is **$0**, which is
-less an achievement than a consequence: the paid services are the ones still
-unprovisioned.
+§14 sets a target of under $10 a month. Actual spend is **$0** — and it is no
+longer $0 because nothing is provisioned. The platform stores, transcodes,
+transcribes and serves real video on free tiers, deployed and running.
 
-| Item | Plan | Actual | Why |
-|---|---|---|---|
-| Media (Bunny Stream) | ~$4 | $0 | No account. Storage and delivery both bill on use, and nothing has been uploaded |
-| Database | Free tier | $0 | Local Postgres 17 with pgvector. Supabase free tier when hosted |
-| Web hosting (Vercel) | $0–7 | $0 | Hobby tier, well inside its limits at this traffic |
-| API and workers | $0–7 | $0 | Not deployed. Render and Fly.io both have free tiers that fit |
-| LLM inference | Free tier, hard cap | $0 | No model key configured, so answers are extractive. The cap is enforced in the worker, not by discipline |
-| Transcription | Free GPU compute | $0 | Fixture transcriber. Real ASR needs the §10.3 batch |
-| Domain | ~$12/year | $0 | `loupe.video` looks unregistered. Not confirmed, not bought |
+| Item | Actual | On what |
+|---|---|---|
+| Object storage and delivery | $0 | Backblaze B2 — 10 GB free, egress free up to 3× stored bytes. Currently 66 MB |
+| Transcoding | $0 | ffmpeg, run wherever the poller runs. No managed encoder |
+| Transcription | $0 | Groq free tier, whisper-large-v3-turbo with word timings |
+| Database | $0 | Supabase free tier, Postgres 17 with pgvector |
+| Three API services | $0 | Render free tier — which is why the embedder is a stand-in |
+| Web hosting | $0 | Vercel Hobby. Non-commercial, so taking money means leaving it |
+| Embeddings | $0 | bge-m3 locally; a hashing fallback in production |
+| Domain | $0 | `loupe.video` looks unregistered. Not confirmed, not bought |
 
-The two numbers that would move if this went live: media, which scales with
-storage plus egress and is why the owned catalogue is capped at 50 hours, and
-transcription, which is one-time per video and is the reason for a cap enforced
-in code.
+Every one of those has a wall, and knowing which wall comes first is the
+engineering:
+
+- **Storage is not the limit; attention is.** B2 gives free egress up to three
+  times stored bytes, so 10 GB held is about 30 GB a month — roughly eighty
+  complete views of a forty-minute talk. Past that it is $0.01/GB, which is
+  cheap and predictable rather than free.
+- **Memory is the limit on retrieval quality.** 512 MB cannot hold bge-m3, so
+  production runs lexically. Fixing that costs money before anything else does.
+- **Free tiers are somebody else's decision.** Oracle halved its always-free
+  compute allocation mid-project without announcing it. That is the argument for
+  the provider boundary in `services/media`, not a hypothetical one.
 
 ## What I would do next
 
 In order, because the order matters more than the list.
 
-**1. Provision the three accounts and close five gates at once.** Supabase,
-Bunny, and a YouTube Data API key. Auth, comment posting, progress writes, real
-uploads, and real ingest are all written and tested and all blocked on
-credentials. This is the highest-value hour available and it is not close.
+**1. Get fifty hours of genuinely different talks.** The pipeline works — it
+transcodes, transcribes, chunks, embeds and serves real video end to end. What
+it has been given is eight synthesised talks. Chapter detection finding no
+boundaries, the recommender losing to popularity, and playlist ranking becoming
+noise are three separate writeups that all end at this same wall. Nothing else
+on this list improves a quality number until it is done.
 
-**2. Get a real corpus.** Fifty hours of genuinely different talks with real
-audio. Three separate pieces of work hit this same wall: chapter detection found
-no boundaries, the recommender lost to popularity, and playlist ranking became
-noise. Each has its own writeup and they all say the same thing. Nothing else on
-this list improves a quality number until this is done.
+**2. Move the embedder somewhere with memory.** Production retrieves lexically
+because bge-m3 does not fit in 512 MB, so the live site behaves materially worse
+than the evaluation describes. This is the first thing worth spending money on,
+and it is a small amount of money.
 
-**3. Re-run every evaluation against it and publish what comes out.** Including
-the threshold sweep that was deliberately left unadopted. A threshold fitted to
-24 fixture cases means nothing; the same sweep over real transcripts would mean
-something, and might well pick a different value.
+**3. Fix citation precision properly.** 0.421 within ±5s is eight times better
+than citing the chunk start and still not good. The remaining errors are a wrong
+sentence rather than a wrong passage, which is a narrower and more tractable
+problem than it was a week ago.
 
-**4. Test shorts on real hardware.** The Phase 8 gate is the only one with no
+**4. Put something in front of production.** There is no tracing, no error
+reporting, no alerting and no rate limiting. Five real bugs were found this week
+by a person clicking around; at any volume they would have been found by users,
+silently. The one that mattered most produced no server-side symptom at all.
+
+**5. Test shorts on real hardware.** The Phase 8 gate is the only one with no
 partial credit, and it needs a mid-range Android phone rather than more code.
 
-**5. Recruit fifteen to twenty real users for two weeks.** §12.2's third option.
+**6. Recruit fifteen to twenty real users for two weeks.** §12.2's third option.
 The recommendation analysis says plainly that a win on synthetic data would not
-have meant the recommendations are good. Real interaction data is the only thing
-that changes that.
+have meant the recommendations are good.
 
 Deliberately not on this list: tuning any threshold to improve a published
 number, and adding features. The gap between this project and a convincing one
-is entirely about the corpus and the credentials.
+is now about the corpus and about production discipline, not about credentials —
+those are provisioned and working.
 
 ## Limitations
 
@@ -433,13 +583,33 @@ Recorded as they are incurred, per the working agreement.
   data itself via `watch_events.is_synthetic`, not only in prose.
 - **`loupe.video` is unverified.** DNS suggests it is unregistered. Not confirmed
   at a registrar, and not purchased.
-- **Bunny integration is written but never executed.** The signing functions are
-  tested against independently computed vectors, because a wrong signature
-  surfaces only as a CDN 403 with no diagnostic. The API calls themselves have
-  never run — no credentials exist yet.
+- **Bunny integration is written but never executed.** Superseded rather than
+  fixed: storage is now S3-compatible and verified against live Backblaze B2,
+  and the Bunny adapter remains beside it, still unexercised. It stays because
+  [ADR 0001](docs/adr/0001-media-provider.md) chose it and nothing disproved
+  that choice — it was never provisioned, which is a different thing.
+
+- **Production retrieval runs on a hashing fallback, not a real embedding
+  model.** bge-m3 needs roughly 2 GB with torch; a free Render instance has
+  512 MB. So the deployed services embed with a hashing stand-in, and retrieval
+  there is lexical rather than semantic: near-verbatim questions are answered,
+  paraphrases are usually refused, and playlist composition mostly declines.
+  Locally, with the real model, the same corpus behaves as the evaluation
+  describes. This is the cost of £0 and the first thing worth money.
+
+- **Free instances spin down.** The first request after a quiet period can take
+  fifty seconds, and on a video that is indistinguishable from a broken player.
+
+- **The corpus is synthesised speech.** Real audio, real recognition, real
+  timings — and clean in every way a conference recording is not. See
+  [Evaluation](#evaluation).
+
+- **Citations land within ±5s on 42% of answered questions.** Better than the
+  chunk-start behaviour it replaced by eight times, and not good. The remaining
+  errors are a wrong sentence rather than a wrong passage.
 - **Progress writes have not run end to end.** The endpoints are tested against
-  a real Postgres and the throttling logic is tested in isolation, but the
-  browser has never sent one, because that needs a signed-in session.
+  a real Postgres and the throttling logic is tested in isolation. Sign-in now
+  works in a browser, so this is testable and has not been tested.
 - **The shorts feed has never been seen playing.** The window policy §13
   specifies — active plus two ahead loading, destroy beyond ±3 — is proven by
   16 unit tests, and the API and layout are verified. But the browser available
@@ -458,19 +628,20 @@ Recorded as they are incurred, per the working agreement.
   description, and channel matching. Results from the two are not comparable
   measurements, and although the UI marks which is which, the ranking still
   mixes them.
-- **Transcripts are generated, not transcribed.** The owned talks point at a
-  test stream with no speech in it, so the pipeline runs a fixture transcriber.
-  Every row it produced is stored with `engine = 'fixture'` and is identifiable
-  with one query. The stage machine, chunker, normaliser, drift detection, and
-  chapter assembly are all real and tested; only the audio is not.
+- **Most transcripts are still generated.** Eight talks carry real recognition
+  output, stored with `engine = 'groq-whisper'`. The rest of the seeded
+  catalogue still points at a reference stream and carries fixture text stored
+  with `engine = 'fixture'` — both are identifiable with one query, which is
+  why the distinction can be stated precisely rather than approximately.
 - **Answers are extractive, not generated.** With no model key configured, an
   answer is the retrieved transcript passages themselves. That cannot state
   anything the speaker did not say, which makes it a defensible baseline rather
   than a degraded mode — and the right thing for §11.2 to measure a generative
   answerer against. Setting `GEMINI_API_KEY` routes to a model behind the same
   interface, with the refusal check still made before it is called.
-- **7 hours indexed, not 50.** The Phase 5 gate asks for 50; reaching it needs
-  real audio and the GPU backfill §10.3 describes.
+- **Well under 50 hours indexed.** The Phase 5 gate asks for 50. The pipeline
+  that would get there now works on real files end to end; what is missing is
+  fifty hours of talks to put through it, not the machinery.
 - **The AI playlist inclusion floor is calibrated on three briefs.** It
   separates on-topic from off-topic on this corpus and is recorded as
   provisional rather than tuned, because three observations over eight videos is
